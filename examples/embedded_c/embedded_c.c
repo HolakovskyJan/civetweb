@@ -204,17 +204,6 @@ CloseHandler(struct mg_connection *conn, void *cbdata)
 
 
 int
-FileHandler(struct mg_connection *conn, void *cbdata)
-{
-	/* In this handler, we ignore the req_info and send the file "fileName". */
-	const char *fileName = (const char *)cbdata;
-
-	mg_send_file(conn, fileName);
-	return 1;
-}
-
-
-int
 field_found(const char *key,
             const char *filename,
             char *path,
@@ -264,54 +253,6 @@ field_stored(const char *path, long long file_size, void *user_data)
 	return 0;
 }
 
-
-int
-FormHandler(struct mg_connection *conn, void *cbdata)
-{
-	/* Handler may access the request info using mg_get_request_info */
-	const struct mg_request_info *req_info = mg_get_request_info(conn);
-	int ret;
-	struct mg_form_data_handler fdh = {field_found, field_get, field_stored, 0};
-
-	/* It would be possible to check the request info here before calling
-	 * mg_handle_form_request. */
-	(void)req_info;
-
-	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: "
-	          "text/plain\r\nConnection: close\r\n\r\n");
-	fdh.user_data = (void *)conn;
-
-	/* Call the form handler */
-	mg_printf(conn, "Form data:");
-	ret = mg_handle_form_request(conn, &fdh);
-	mg_printf(conn, "\r\n%i fields found", ret);
-
-	return 1;
-}
-
-
-int
-FileUploadForm(struct mg_connection *conn, void *cbdata)
-{
-	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
-	          "close\r\n\r\n");
-
-	mg_printf(conn, "<!DOCTYPE html>\n");
-	mg_printf(conn, "<html>\n<head>\n");
-	mg_printf(conn, "<meta charset=\"UTF-8\">\n");
-	mg_printf(conn, "<title>File upload</title>\n");
-	mg_printf(conn, "</head>\n<body>\n");
-	mg_printf(conn,
-	          "<form action=\"%s\" method=\"POST\" "
-	          "enctype=\"multipart/form-data\">\n",
-	          (const char *)cbdata);
-	mg_printf(conn, "<input type=\"file\" name=\"filesin\" multiple>\n");
-	mg_printf(conn, "<input type=\"submit\" value=\"Submit\">\n");
-	mg_printf(conn, "</form>\n</body>\n</html>\n");
-	return 1;
-}
 
 #define MD5_STATIC static
 #include "../src/md5.inl"
@@ -370,50 +311,6 @@ field_get_checksum(const char *key,
 	           valuelen);
 
 	return 0;
-}
-
-
-int
-CheckSumHandler(struct mg_connection *conn, void *cbdata)
-{
-	/* Handler may access the request info using mg_get_request_info */
-	const struct mg_request_info *req_info = mg_get_request_info(conn);
-	int i, j, ret;
-	struct tfiles_checksums chksums;
-	md5_byte_t digest[16];
-	struct mg_form_data_handler fdh = {field_disp_read_on_the_fly,
-	                                   field_get_checksum,
-	                                   0,
-	                                   (void *)&chksums};
-
-	/* It would be possible to check the request info here before calling
-	 * mg_handle_form_request. */
-	(void)req_info;
-
-	memset(&chksums, 0, sizeof(chksums));
-
-	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\n"
-	          "Content-Type: text/plain\r\n"
-	          "Connection: close\r\n\r\n");
-
-	/* Call the form handler */
-	mg_printf(conn, "File checksums:");
-	ret = mg_handle_form_request(conn, &fdh);
-	for (i = 0; i < chksums.index; i++) {
-		md5_finish(&(chksums.file[i].chksum), digest);
-		/* Visual Studio 2010+ support llu */
-		mg_printf(conn,
-		          "\r\n%s %llu ",
-		          chksums.file[i].name,
-		          chksums.file[i].length);
-		for (j = 0; j < 16; j++) {
-			mg_printf(conn, "%02x", (unsigned int)digest[j]);
-		}
-	}
-	mg_printf(conn, "\r\n%i files\r\n", ret);
-
-	return 1;
 }
 
 
@@ -645,7 +542,7 @@ WebsocketDataHandler(struct mg_connection *conn,
 	ASSERT(client->state >= 1);
 
 	fprintf(stdout, "Websocket got %lu bytes of ", (unsigned long)len);
-	switch (((unsigned char)bit) & 0x0F) {
+	switch (((unsigned char)bits) & 0x0F) {
 	case WEBSOCKET_OPCODE_CONTINUATION:
 		fprintf(stdout, "continuation");
 		break;
@@ -665,7 +562,7 @@ WebsocketDataHandler(struct mg_connection *conn,
 		fprintf(stdout, "pong");
 		break;
 	default:
-		fprintf(stdout, "unknown(%1xh)", ((unsigned char)bit) & 0x0F);
+		fprintf(stdout, "unknown(%1xh)", ((unsigned char)bits) & 0x0F);
 		break;
 	}
 	fprintf(stdout, " data:\r\n");
@@ -813,14 +710,10 @@ int
 main(int argc, char *argv[])
 {
 	const char *options[] = {
-	    "document_root",
-	    DOCUMENT_ROOT,
 	    "listening_ports",
 	    PORT,
 	    "request_timeout_ms",
 	    "10000",
-	    "error_log_file",
-	    "error.log",
 #ifdef USE_WEBSOCKET
 	    "websocket_timeout_ms",
 	    "3600000",
@@ -908,28 +801,6 @@ main(int argc, char *argv[])
 
 	/* Add handler for /close extention */
 	mg_set_request_handler(ctx, "/close", CloseHandler, 0);
-
-	/* Add handler for /form  (serve a file outside the document root) */
-	mg_set_request_handler(ctx,
-	                       "/form",
-	                       FileHandler,
-	                       (void *)"../../test/form.html");
-
-	/* Add handler for form data */
-	mg_set_request_handler(ctx,
-	                       "/handle_form.embedded_c.example.callback",
-	                       FormHandler,
-	                       (void *)0);
-
-	/* Add a file upload handler for parsing files on the fly */
-	mg_set_request_handler(ctx,
-	                       "/on_the_fly_form",
-	                       FileUploadForm,
-	                       (void *)"/on_the_fly_form.md5.callback");
-	mg_set_request_handler(ctx,
-	                       "/on_the_fly_form.md5.callback",
-	                       CheckSumHandler,
-	                       (void *)0);
 
 	/* Add handler for /cookie example */
 	mg_set_request_handler(ctx, "/cookie", CookieHandler, 0);

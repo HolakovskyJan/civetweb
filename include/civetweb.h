@@ -584,24 +584,6 @@ mg_get_ports(const struct mg_context *ctx, size_t size, int *ports, int *ssl);
 #endif
 
 
-/* Add, edit or delete the entry in the passwords file.
-
-   This function allows an application to manipulate .htpasswd files on the
-   fly by adding, deleting and changing user records. This is one of the
-   several ways of implementing authentication on the server side. For another,
-   cookie-based way please refer to the examples/chat in the source tree.
-
-   If password is not NULL, entry is added (or modified if already exists).
-   If password is NULL, entry is deleted.
-
-   Return:
-     1 on success, 0 on error. */
-CIVETWEB_API int mg_modify_passwords_file(const char *passwords_file_name,
-                                          const char *domain,
-                                          const char *user,
-                                          const char *password);
-
-
 /* Return information associated with the request.
  * Use this function to implement a server and get data about a request
  * from a HTTP/HTTPS client.
@@ -732,54 +714,11 @@ CIVETWEB_API int mg_send_chunk(struct mg_connection *conn,
                                unsigned int chunk_len);
 
 
-/* Send contents of the entire file together with HTTP headers. */
-CIVETWEB_API void mg_send_file(struct mg_connection *conn, const char *path);
-
-
 /* Send HTTP error reply. */
 CIVETWEB_API void mg_send_http_error(struct mg_connection *conn,
                                      int status_code,
                                      PRINTF_FORMAT_STRING(const char *fmt),
                                      ...) PRINTF_ARGS(3, 4);
-
-
-/* Send contents of the entire file together with HTTP headers.
-   Parameters:
-     conn: Current connection information.
-     path: Full path to the file to send.
-     mime_type: Content-Type for file.  NULL will cause the type to be
-                looked up by the file extension.
-*/
-CIVETWEB_API void mg_send_mime_file(struct mg_connection *conn,
-                                    const char *path,
-                                    const char *mime_type);
-
-
-/* Send contents of the entire file together with HTTP headers.
-   Parameters:
-     conn: Current connection information.
-     path: Full path to the file to send.
-     mime_type: Content-Type for file.  NULL will cause the type to be
-                looked up by the file extension.
-     additional_headers: Additional custom header fields appended to the header.
-                         Each header should start with an X-, to ensure it is
-                         not included twice.
-                         NULL does not append anything.
-*/
-CIVETWEB_API void mg_send_mime_file2(struct mg_connection *conn,
-                                     const char *path,
-                                     const char *mime_type,
-                                     const char *additional_headers);
-
-
-/* Store body data into a file. */
-CIVETWEB_API long long mg_store_body(struct mg_connection *conn,
-                                     const char *path);
-/* Read entire request body and store it in a file "path".
-   Return:
-     < 0   Error
-     >= 0  Number of bytes stored in file "path".
-*/
 
 
 /* Read data from the remote end, return number of bytes read.
@@ -1011,11 +950,6 @@ CIVETWEB_API int mg_handle_form_request(struct mg_connection *conn,
    Return: 0 on success, non-0 on error. */
 typedef void *(*mg_thread_func_t)(void *);
 CIVETWEB_API int mg_start_thread(mg_thread_func_t f, void *p);
-
-
-/* Return builtin mime type for the given file name.
-   For unrecognized extensions, "text/plain" is returned. */
-CIVETWEB_API const char *mg_get_builtin_mime_type(const char *file_name);
 
 
 /* Get text representation of HTTP status code. */
