@@ -192,7 +192,7 @@ list of key=value pairs, where key could be:
     x.x.x.x/mask        limit speed for specified subnet
     uri_prefix_pattern  limit speed for given URIs
 
-The value is a floating-point number of bytes per second, optionally
+The value is a number of bytes per second, optionally
 followed by a `k` or `m` character, meaning kilobytes and
 megabytes respectively. A limit of 0 means unlimited rate. The
 last matching rule wins. Examples:

@@ -393,6 +393,7 @@ struct timespec {
 
 #ifdef MUST_IMPLEMENT_CLOCK_GETTIME
 #define clock_gettime mg_clock_gettime
+// TODO: replace
 static int
 clock_gettime(clockid_t clk_id, struct timespec *tp)
 {
@@ -1192,12 +1193,12 @@ mg_current_thread_id(void)
 }
 
 
-static uint64_t
-mg_get_current_time_ns(void)
+static unsigned int
+mg_get_current_time_ms(void)
 {
 	struct timespec tsnow;
 	clock_gettime(CLOCK_REALTIME, &tsnow);
-	return (((uint64_t)tsnow.tv_sec) * 1000000000) + (uint64_t)tsnow.tv_nsec;
+	return ((unsigned int)(tsnow.tv_sec) * 1000) + (unsigned int)tsnow.tv_nsec / 1000000;
 }
 
 
@@ -1894,7 +1895,6 @@ struct mg_context {
 						   * allocated for each worker */
 
 	time_t start_time;        /* Server start time, used for authentication */
-	uint64_t auth_nonce_mask; /* Mask for all nonce values */
 	pthread_mutex_t nonce_mutex; /* Protects nonce_count */
 	unsigned long nonce_count;   /* Used nonces, used for authentication */
 
@@ -2518,12 +2518,12 @@ gmt_time_string(char *buf, size_t buf_len, time_t *t)
 }
 
 
-/* difftime for struct timespec. Return value is in seconds. */
-static double
+/* difftime for struct timespec. Return value is in milliseconds. */
+static unsigned int
 mg_difftimespec(const struct timespec *ts_now, const struct timespec *ts_before)
 {
-	return (double)(ts_now->tv_nsec - ts_before->tv_nsec) * 1.0E-9
-	       + (double)(ts_now->tv_sec - ts_before->tv_sec);
+	return (unsigned int)((ts_now->tv_nsec - ts_before->tv_nsec) / 1000000
+	       + (ts_now->tv_sec - ts_before->tv_sec) * 1000);
 }
 
 
@@ -3397,6 +3397,7 @@ pthread_cond_init(pthread_cond_t *cv, const void *unused)
 }
 
 
+// TODO: replace
 static int
 pthread_cond_timedwait(pthread_cond_t *cv,
 		       pthread_mutex_t *mutex,
@@ -3418,7 +3419,7 @@ pthread_cond_timedwait(pthread_cond_t *cv,
 	LeaveCriticalSection(&cv->threadIdSec);
 
 	if (abstime) {
-		nsnow = mg_get_current_time_ns();
+		nsnow = mg_get_current_time_ms() * 1000000;
 		nswaitabs =
 		    (((int64_t)abstime->tv_sec) * 1000000000) + abstime->tv_nsec;
 		nswaitrel = nswaitabs - nsnow;
@@ -3946,24 +3947,24 @@ set_blocking_mode(SOCKET sock, int blocking)
 
 
 /* Get a random number (independent of C rand function) */
-static uint64_t
+static unsigned int
 get_random(void)
 {
-	static uint64_t lfsr = 0; /* Linear feedback shift register */
-	static uint64_t lcg = 0;  /* Linear congruential generator */
-	uint64_t now = mg_get_current_time_ns();
+	static unsigned int lfsr = 0; /* Linear feedback shift register */
+	static unsigned int lcg = 0;  /* Linear congruential generator */
+	unsigned int now = mg_get_current_time_ms();
 
 	if (lfsr == 0) {
 		/* lfsr will be only 0 if has not been initialized,
 		 * so this code is called only once. */
-		lfsr = mg_get_current_time_ns();
-		lcg = mg_get_current_time_ns();
+		lfsr = mg_get_current_time_ms();
+		lcg = mg_get_current_time_ms();
 	} else {
 		/* Get the next step of both random number generators. */
 		lfsr = (lfsr >> 1)
-		       | ((((lfsr >> 0) ^ (lfsr >> 1) ^ (lfsr >> 3) ^ (lfsr >> 4)) & 1)
-			  << 63);
-		lcg = lcg * 6364136223846793005LL + 1442695040888963407LL;
+		       | ((((lfsr >> 31) ^ (lfsr >> 6) ^ (lfsr >> 4) ^ (lfsr >> 2) ^ (lfsr >> 1) ^ lfsr) & 1)
+			  << 31);
+		lcg = lcg * 1664525 + 1013904223;
 	}
 
 	/* Combining two pseudo-random number generators and a high resolution part
@@ -4028,9 +4029,9 @@ push_inner(struct mg_context *ctx,
 	   SSL *ssl,
 	   const char *buf,
 	   int len,
-	   double timeout)
+	   int timeout)
 {
-	uint64_t start = 0, now = 0, timeout_ns = 0;
+	unsigned int start = 0, now = 0;
 	int n, err;
 	int ms_wait = SOCKET_TIMEOUT_QUANTUM; /* Sleep quantum in ms */
 
@@ -4041,8 +4042,7 @@ push_inner(struct mg_context *ctx,
 #endif
 
 	if (timeout > 0) {
-		start = mg_get_current_time_ns();
-		timeout_ns = (uint64_t)(timeout * 1.0E9);
+		start = mg_get_current_time_ms();
 	}
 
 	if (ctx == NULL) {
@@ -4152,10 +4152,10 @@ push_inner(struct mg_context *ctx,
 		 */
 
 		if (timeout >= 0) {
-			now = mg_get_current_time_ns();
+			now = mg_get_current_time_ms();
 		}
 
-	} while ((timeout <= 0) || ((now - start) <= timeout_ns));
+	} while ((timeout <= 0) || ((now - start) <= (unsigned int)timeout));
 
 	(void)err; /* Avoid unused warning if NO_SSL is set and DEBUG_TRACE is not
 		      used */
@@ -4172,7 +4172,7 @@ push_all(struct mg_context *ctx,
 	 const char *buf,
 	 int64_t len)
 {
-	double timeout = -1.0;
+	int timeout = -1;
 	int64_t n, nwritten = 0;
 
 	if (ctx == NULL) {
@@ -4180,7 +4180,7 @@ push_all(struct mg_context *ctx,
 	}
 
 	if (ctx->config[REQUEST_TIMEOUT]) {
-		timeout = atoi(ctx->config[REQUEST_TIMEOUT]) / 1000.0;
+		timeout = atoi(ctx->config[REQUEST_TIMEOUT]);
 	}
 
 	while ((len > 0) && (ctx->stop_flag == 0)) {
@@ -4213,7 +4213,7 @@ pull_inner(FILE *fp,
 	   struct mg_connection *conn,
 	   char *buf,
 	   int len,
-	   double timeout)
+	   int timeout)
 {
 	int nread, err = 0;
 
@@ -4277,7 +4277,7 @@ pull_inner(FILE *fp,
 		pfd[0].fd = conn->client.sock;
 		pfd[0].events = POLLIN;
 		pollres =
-		    mg_poll(pfd, 1, (int)(timeout * 1000.0), &(conn->ctx->stop_flag));
+		    mg_poll(pfd, 1, timeout, &(conn->ctx->stop_flag));
 		if (conn->ctx->stop_flag) {
 			return -2;
 		}
@@ -4314,7 +4314,7 @@ pull_inner(FILE *fp,
 		pfd[0].fd = conn->client.sock;
 		pfd[0].events = POLLIN;
 		pollres =
-		    mg_poll(pfd, 1, (int)(timeout * 1000.0), &(conn->ctx->stop_flag));
+		    mg_poll(pfd, 1, timeout, &(conn->ctx->stop_flag));
 		if (conn->ctx->stop_flag) {
 			return -2;
 		}
@@ -4395,15 +4395,14 @@ static int
 pull_all(FILE *fp, struct mg_connection *conn, char *buf, int len)
 {
 	int n, nread = 0;
-	double timeout = -1.0;
-	uint64_t start_time = 0, now = 0, timeout_ns = 0;
+	int timeout = -1;
+	unsigned int start_time = 0, now = 0;
 
 	if (conn->ctx->config[REQUEST_TIMEOUT]) {
-		timeout = atoi(conn->ctx->config[REQUEST_TIMEOUT]) / 1000.0;
+		timeout = atoi(conn->ctx->config[REQUEST_TIMEOUT]);
 	}
-	if (timeout >= 0.0) {
-		start_time = mg_get_current_time_ns();
-		timeout_ns = (uint64_t)(timeout * 1.0E9);
+	if (timeout >= 0) {
+		start_time = mg_get_current_time_ms();
 	}
 
 	while ((len > 0) && (conn->ctx->stop_flag == 0)) {
@@ -4416,8 +4415,8 @@ pull_all(FILE *fp, struct mg_connection *conn, char *buf, int len)
 		} else if (n == -1) {
 			/* timeout */
 			if (timeout >= 0.0) {
-				now = mg_get_current_time_ns();
-				if ((now - start_time) <= timeout_ns) {
+				now = mg_get_current_time_ms();
+				if ((now - start_time) <= (unsigned int)timeout) {
 					continue;
 				}
 			}
@@ -5926,7 +5925,7 @@ read_message(FILE *fp,
 {
 	int request_len, n = 0;
 	struct timespec last_action_time;
-	double request_timeout;
+	int request_timeout;
 
 	if (!conn) {
 		return 0;
@@ -5935,15 +5934,15 @@ read_message(FILE *fp,
 	memset(&last_action_time, 0, sizeof(last_action_time));
 
 	if (conn->ctx->config[REQUEST_TIMEOUT]) {
-		/* value of request_timeout is in seconds, config in milliseconds */
-		request_timeout = atof(conn->ctx->config[REQUEST_TIMEOUT]) / 1000.0;
+		/* value of request_timeout is in milliseconds, config in milliseconds */
+		request_timeout = atoi(conn->ctx->config[REQUEST_TIMEOUT]);
 	} else {
-		request_timeout = -1.0;
+		request_timeout = -1;
 	}
 	if (conn->handled_requests > 0) {
 		if (conn->ctx->config[KEEP_ALIVE_TIMEOUT]) {
 			request_timeout =
-			    atof(conn->ctx->config[KEEP_ALIVE_TIMEOUT]) / 1000.0;
+			    atoi(conn->ctx->config[KEEP_ALIVE_TIMEOUT]);
 		}
 	}
 
@@ -5979,7 +5978,7 @@ read_message(FILE *fp,
 
 		if ((request_len == 0) && (request_timeout >= 0)) {
 			if (mg_difftimespec(&last_action_time, &(conn->req_time))
-			    > request_timeout) {
+			    > (unsigned int)request_timeout) {
 				/* Timeout */
 				return -1;
 			}
@@ -6097,13 +6096,13 @@ read_websocket(struct mg_connection *conn,
 	unsigned char mem[4096];
 	unsigned char *data = mem;
 	unsigned char mop; /* mask flag and opcode */
-	double timeout = -1.0;
+	int timeout = -1;
 
 	if (conn->ctx->config[WEBSOCKET_TIMEOUT]) {
-		timeout = atoi(conn->ctx->config[WEBSOCKET_TIMEOUT]) / 1000.0;
+		timeout = atoi(conn->ctx->config[WEBSOCKET_TIMEOUT]);
 	}
 	if ((timeout <= 0.0) && (conn->ctx->config[REQUEST_TIMEOUT])) {
-		timeout = atoi(conn->ctx->config[REQUEST_TIMEOUT]) / 1000.0;
+		timeout = atoi(conn->ctx->config[REQUEST_TIMEOUT]);
 	}
 
 	mg_set_thread_name("wsock");
@@ -6376,7 +6375,7 @@ mg_websocket_client_write(struct mg_connection *conn,
 	int retval = -1;
 	char *masked_data =
 	    (char *)mg_malloc_ctx(((dataLen + 7) / 4) * 4, conn->ctx);
-	uint32_t masking_key = (uint32_t)get_random();
+	uint32_t masking_key = get_random();
 
 	if (masked_data == NULL) {
 		/* Return -1 in an error case */
@@ -6646,11 +6645,11 @@ set_throttle(const char *spec, uint32_t remote_ip, const char *uri)
 	struct vec vec, val;
 	uint32_t net, mask;
 	char mult;
-	double v;
+	int v;
 
 	while ((spec = next_option(spec, &vec, &val)) != NULL) {
 		mult = ',';
-		if ((val.ptr == NULL) || (sscanf(val.ptr, "%lf%c", &v, &mult) < 1)
+		if ((val.ptr == NULL) || (sscanf(val.ptr, "%d%c", &v, &mult) < 1)
 		    || (v < 0) || ((lowercase(&mult) != 'k')
 				   && (lowercase(&mult) != 'm') && (mult != ','))) {
 			continue;
@@ -6659,13 +6658,13 @@ set_throttle(const char *spec, uint32_t remote_ip, const char *uri)
 			 ? 1024
 			 : ((lowercase(&mult) == 'm') ? 1048576 : 1);
 		if (vec.len == 1 && vec.ptr[0] == '*') {
-			throttle = (int)v;
+			throttle = v;
 		} else if (parse_net(vec.ptr, &net, &mask) > 0) {
 			if ((remote_ip & mask) == net) {
-				throttle = (int)v;
+				throttle = v;
 			}
 		} else if (match_prefix(vec.ptr, vec.len, uri) > 0) {
-			throttle = (int)v;
+			throttle = v;
 		}
 	}
 
@@ -9115,7 +9114,7 @@ close_socket_gracefully(struct mg_connection *conn)
 	 * when server decides to close the connection; then when client
 	 * does recv() it gets no data back. */
 	do {
-		n = pull_inner(NULL, conn, buf, sizeof(buf), /* Timeout in s: */ 1.0);
+		n = pull_inner(NULL, conn, buf, sizeof(buf), /* Timeout in ms: */ 1000);
 	} while (n > 0);
 #endif
 
@@ -11047,10 +11046,6 @@ mg_start(const struct mg_callbacks *callbacks,
 	if ((ctx = (struct mg_context *)mg_calloc(1, sizeof(*ctx))) == NULL) {
 		return NULL;
 	}
-
-	/* Random number generator will initialize at the first call */
-	ctx->auth_nonce_mask =
-	    (uint64_t)get_random() ^ (uint64_t)(ptrdiff_t)(options);
 
 	if (mg_atomic_inc(&sTlsInit) == 1) {
 
