@@ -34,18 +34,6 @@
 #if defined(__linux__) && !defined(_XOPEN_SOURCE)
 #define _XOPEN_SOURCE 600 /* For flockfile() on Linux */
 #endif
-#ifndef _LARGEFILE_SOURCE
-#define _LARGEFILE_SOURCE /* For fseeko(), ftello() */
-#endif
-#ifndef _FILE_OFFSET_BITS
-#define _FILE_OFFSET_BITS 64 /* Use 64-bit file offsets by default */
-#endif
-#ifndef __STDC_FORMAT_MACROS
-#define __STDC_FORMAT_MACROS /* <inttypes.h> wants this for C++ */
-#endif
-#ifndef __STDC_LIMIT_MACROS
-#define __STDC_LIMIT_MACROS /* C++ wants that for INT64_MAX */
-#endif
 #ifdef __sun
 #define __EXTENSIONS__  /* to expose flockfile and friends in stdio.h */
 #define __inline inline /* not recognized on older compiler versions */
@@ -272,7 +260,6 @@ mg_static_assert(PATH_MAX >= 1, "path length must be a positive number");
 #include <direct.h>
 #include <io.h>
 #else            /* _WIN32_WCE */
-#define NO_POPEN /* WinCE has no popen */
 
 typedef long off_t;
 
@@ -324,32 +311,17 @@ typedef long off_t;
 
 #define WINCDECL __cdecl
 #define vsnprintf_impl _vsnprintf
-#define access _access
 #define mg_sleep(x) (Sleep(x))
 
 #define pipe(x) _pipe(x, MG_BUF_LEN, _O_BINARY)
-#ifndef popen
-#define popen(x, y) (_popen(x, y))
-#endif
-#ifndef pclose
-#define pclose(x) (_pclose(x))
-#endif
 #define close(x) (_close(x))
 #define dlsym(x, y) (GetProcAddress((HINSTANCE)(x), (y)))
 #define RTLD_LAZY (0)
-#define fseeko(x, y, z) ((_lseeki64(_fileno(x), (y), (z)) == -1) ? -1 : 0)
-#define fdopen(x, y) (_fdopen((x), (y)))
 #define write(x, y, z) (_write((x), (y), (unsigned)z))
 #define read(x, y, z) (_read((x), (y), (unsigned)z))
 #define flockfile(x) (EnterCriticalSection(&global_log_file_lock))
 #define funlockfile(x) (LeaveCriticalSection(&global_log_file_lock))
 #define sleep(x) (Sleep((x)*1000))
-#define rmdir(x) (_rmdir(x))
-#define timegm(x) (_mkgmtime(x))
-
-#if !defined(fileno)
-#define fileno(x) (_fileno(x))
-#endif /* !fileno MINGW #defines fileno */
 
 typedef HANDLE pthread_mutex_t;
 typedef DWORD pthread_key_t;
@@ -496,12 +468,7 @@ typedef unsigned short int in_port_t;
 #define O_BINARY (0)
 #endif /* O_BINARY */
 #define closesocket(a) (close(a))
-#define mg_mkdir(conn, path, mode) (mkdir(path, mode))
-#define mg_remove(conn, x) (remove(x))
 #define mg_sleep(x) (usleep((x)*1000))
-#define mg_opendir(conn, x) (opendir(x))
-#define mg_closedir(x) (closedir(x))
-#define mg_readdir(x) (readdir(x))
 #define ERRNO (errno)
 #define INVALID_SOCKET (-1)
 #define INT64_FMT PRId64
@@ -599,9 +566,6 @@ static pthread_mutexattr_t pthread_mutex_attr;
 #endif /* _WIN32 */
 
 
-#define PASSWORDS_FILE_NAME ".htpasswd"
-#define CGI_ENVIRONMENT_SIZE (4096)
-#define MAX_CGI_ENVIR_VARS (256)
 #define MG_BUF_LEN (8192)
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
@@ -705,8 +669,6 @@ strftime(char *dst, size_t dst_size, const char *fmt, const struct tm *tm)
 
 #define _beginthreadex(psec, stack, func, prm, flags, ptid)                    \
 	(uintptr_t) CreateThread(psec, stack, func, prm, flags, ptid)
-
-#define access(x, a) 1 /* not required anyway */
 
 /* WinCE-TODO: define stat, remove, rename, _rmdir, _lseeki64 */
 /* Values from errno.h in Windows SDK (Visual Studio). */
@@ -1065,36 +1027,6 @@ static void mg_snprintf(const struct mg_connection *conn,
 			size_t buflen,
 			PRINTF_FORMAT_STRING(const char *fmt),
 			...) PRINTF_ARGS(5, 6);
-
-/* This following lines are just meant as a reminder to use the mg-functions
- * for memory management */
-#ifdef malloc
-#undef malloc
-#endif
-#ifdef calloc
-#undef calloc
-#endif
-#ifdef realloc
-#undef realloc
-#endif
-#ifdef free
-#undef free
-#endif
-#ifdef snprintf
-#undef snprintf
-#endif
-#ifdef vsnprintf
-#undef vsnprintf
-#endif
-#define malloc DO_NOT_USE_THIS_FUNCTION__USE_mg_malloc
-#define calloc DO_NOT_USE_THIS_FUNCTION__USE_mg_calloc
-#define realloc DO_NOT_USE_THIS_FUNCTION__USE_mg_realloc
-#define free DO_NOT_USE_THIS_FUNCTION__USE_mg_free
-#define snprintf DO_NOT_USE_THIS_FUNCTION__USE_mg_snprintf
-#ifdef _WIN32 /* vsnprintf must not be used in any system, * \ \ \             \
-	       * but this define only works well for Windows. */
-#define vsnprintf DO_NOT_USE_THIS_FUNCTION__USE_mg_vsnprintf
-#endif
 
 
 static pthread_key_t sTlsKey; /* Thread local storage index */
@@ -4016,7 +3948,6 @@ mg_poll(struct pollfd *pfd,
  */
 static int
 push_inner(struct mg_context *ctx,
-	   FILE *fp,
 	   SOCKET sock,
 	   SSL *ssl,
 	   const char *buf,
@@ -4068,32 +3999,22 @@ push_inner(struct mg_context *ctx,
 			}
 		} else
 #endif
-		    if (fp != NULL) {
-			n = (int)fwrite(buf, 1, (size_t)len, fp);
-			if (ferror(fp)) {
-				n = -1;
-				err = ERRNO;
-			} else {
-				err = 0;
-			}
-		} else {
-			n = (int)send(sock, buf, (len_t)len, MSG_NOSIGNAL);
-			err = (n < 0) ? ERRNO : 0;
+		n = (int)send(sock, buf, (len_t)len, MSG_NOSIGNAL);
+		err = (n < 0) ? ERRNO : 0;
 #ifdef _WIN32
-			if (err == WSAEWOULDBLOCK) {
-				err = 0;
-				n = 0;
-			}
+		if (err == WSAEWOULDBLOCK) {
+			err = 0;
+			n = 0;
+		}
 #else
-			if (err == EWOULDBLOCK) {
-				err = 0;
-				n = 0;
-			}
+		if (err == EWOULDBLOCK) {
+			err = 0;
+			n = 0;
+		}
 #endif
-			if (n < 0) {
-				/* shutdown of the socket at client side */
-				return -2;
-			}
+		if (n < 0) {
+			/* shutdown of the socket at client side */
+			return -2;
 		}
 
 		if (ctx->stop_flag) {
@@ -4158,7 +4079,6 @@ push_inner(struct mg_context *ctx,
 
 static unsigned int
 push_all(struct mg_context *ctx,
-	 FILE *fp,
 	 SOCKET sock,
 	 SSL *ssl,
 	 const char *buf,
@@ -4176,7 +4096,7 @@ push_all(struct mg_context *ctx,
 	}
 
 	while ((len > 0) && (ctx->stop_flag == 0)) {
-		n = push_inner(ctx, fp, sock, ssl, buf + nwritten, (int)len, timeout);
+		n = push_inner(ctx, sock, ssl, buf + nwritten, (int)len, timeout);
 		if (n < 0) {
 			if (nwritten == 0) {
 				nwritten = n; /* Propagate the error */
@@ -4201,8 +4121,7 @@ push_all(struct mg_context *ctx,
  *   -2 .. error
  */
 static int
-pull_inner(FILE *fp,
-	   struct mg_connection *conn,
+pull_inner(struct mg_connection *conn,
 	   char *buf,
 	   int len,
 	   int timeout)
@@ -4223,21 +4142,8 @@ pull_inner(FILE *fp,
 	 * In this case we need to repeat at least once.
 	 */
 
-	if (fp != NULL) {
-#if !defined(_WIN32_WCE)
-		/* Use read() instead of fread(), because if we're reading from the
-		 * CGI pipe, fread() may block until IO buffer is filled up. We
-		 * cannot afford to block and must pass all read bytes immediately
-		 * to the client. */
-		nread = (int)read(fileno(fp), buf, (size_t)len);
-#else
-		/* WinCE does not support CGI pipes */
-		nread = (int)fread(buf, 1, (size_t)len, fp);
-#endif
-		err = (nread < 0) ? ERRNO : 0;
-
 #ifndef NO_SSL
-	} else if ((conn->ssl != NULL)
+	if ((conn->ssl != NULL)
 		   && ((ssl_pending = SSL_pending(conn->ssl)) > 0)) {
 		/* We already know there is no more data buffered in conn->buf
 		 * but there is more available in the SSL layer. So don't poll
@@ -4297,9 +4203,9 @@ pull_inner(FILE *fp,
 			/* pollres = 0 means timeout */
 			nread = 0;
 		}
-#endif
-
-	} else {
+	} else
+#endif	
+	{
 		struct pollfd pfd[1];
 		int pollres;
 
@@ -4384,7 +4290,7 @@ pull_inner(FILE *fp,
 
 
 static int
-pull_all(FILE *fp, struct mg_connection *conn, char *buf, int len)
+pull_all(struct mg_connection *conn, char *buf, int len)
 {
 	int n, nread = 0;
 	int timeout = -1;
@@ -4398,7 +4304,7 @@ pull_all(FILE *fp, struct mg_connection *conn, char *buf, int len)
 	}
 
 	while ((len > 0) && (conn->ctx->stop_flag == 0)) {
-		n = pull_inner(fp, conn, buf + nread, len, timeout);
+		n = pull_inner(conn, buf + nread, len, timeout);
 		if (n == -2) {
 			if (nread == 0) {
 				nread = -1; /* Propagate the error */
@@ -4515,7 +4421,7 @@ mg_read_inner(struct mg_connection *conn, void *buf, size_t len)
 		/* We have returned all buffered data. Read new data from the remote
 		 * socket.
 		 */
-		if ((n = pull_all(NULL, conn, (char *)buf, (int)len64)) >= 0) {
+		if ((n = pull_all(conn, (char *)buf, (int)len64)) >= 0) {
 			nread += n;
 		} else {
 			nread = ((nread > 0) ? nread : n);
@@ -4658,7 +4564,6 @@ mg_write(struct mg_connection *conn, const void *buf, size_t len)
 			allowed = len;
 		}
 		if ((total = push_all(conn->ctx,
-				      NULL,
 				      conn->client.sock,
 				      conn->ssl,
 				      (const char *)buf,
@@ -4670,7 +4575,6 @@ mg_write(struct mg_connection *conn, const void *buf, size_t len)
 					      ? len - total
 					      : conn->throttle;
 				if ((n = push_all(conn->ctx,
-						  NULL,
 						  conn->client.sock,
 						  conn->ssl,
 						  (const char *)buf,
@@ -4686,7 +4590,6 @@ mg_write(struct mg_connection *conn, const void *buf, size_t len)
 		}
 	} else {
 		total = push_all(conn->ctx,
-				 NULL,
 				 conn->client.sock,
 				 conn->ssl,
 				 (const char *)buf,
@@ -5902,8 +5805,7 @@ parse_http_response(char *buf, int len, struct mg_response_info *ri)
  * have some data. The length of the data is stored in nread.
  * Upon every read operation, increase nread by the number of bytes read. */
 static int
-read_message(FILE *fp,
-	     struct mg_connection *conn,
+read_message(struct mg_connection *conn,
 	     char *buf,
 	     int bufsiz,
 	     int *nread)
@@ -5948,8 +5850,7 @@ read_message(FILE *fp,
 			return -2;
 		}
 
-		n = pull_inner(
-		    fp, conn, buf + *nread, bufsiz - *nread, request_timeout);
+		n = pull_inner(conn, buf + *nread, bufsiz - *nread, request_timeout);
 		if (n == -2) {
 			/* Receive error */
 			return -1;
@@ -6148,8 +6049,7 @@ read_websocket(struct mg_connection *conn,
 				memcpy(data, buf + header_len, len);
 				error = 0;
 				while (len < data_len) {
-					n = pull_inner(NULL,
-						       conn,
+					n = pull_inner(conn,
 						       (char *)(data + len),
 						       (int)(data_len - len),
 						       timeout);
@@ -6216,8 +6116,7 @@ read_websocket(struct mg_connection *conn,
 		} else {
 			/* Read from the socket into the next available location in the
 			 * message queue. */
-			n = pull_inner(NULL,
-				       conn,
+			n = pull_inner(conn,
 				       conn->buf + conn->data_len,
 				       conn->buf_size - conn->data_len,
 				       timeout);
@@ -9099,7 +8998,7 @@ close_socket_gracefully(struct mg_connection *conn)
 	 * when server decides to close the connection; then when client
 	 * does recv() it gets no data back. */
 	do {
-		n = pull_inner(NULL, conn, buf, sizeof(buf), /* Timeout in ms: */ 1000);
+		n = pull_inner(conn, buf, sizeof(buf), /* Timeout in ms: */ 1000);
 	} while (n > 0);
 #endif
 
@@ -9697,7 +9596,7 @@ get_message(struct mg_connection *conn, char *ebuf, size_t ebuf_len, int *err)
 	clock_gettime(CLOCK_MONOTONIC, &(conn->req_time));
 
 	conn->request_len =
-	    read_message(NULL, conn, conn->buf, conn->buf_size, &conn->data_len);
+	    read_message(conn, conn->buf, conn->buf_size, &conn->data_len);
 	/* assert(conn->request_len < 0 || conn->data_len >= conn->request_len);
 	 */
 	if ((conn->request_len >= 0) && (conn->data_len < conn->request_len)) {
@@ -11319,9 +11218,6 @@ mg_check_feature(unsigned feature)
 #endif
 #if !defined(NO_NONCE_CHECK)
 					    | 0x0400u
-#endif
-#if !defined(NO_POPEN)
-					    | 0x0800u
 #endif
 	    ;
 	return (feature & feature_set);
