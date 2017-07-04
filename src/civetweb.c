@@ -224,10 +224,6 @@ _civet_safe_clock_gettime(int clk_id, struct timespec *t)
 #include <stdio.h>
 #include <stdint.h>
 
-#ifndef INT64_MAX
-#define INT64_MAX (9223372036854775807)
-#endif
-
 
 #ifndef MAX_WORKER_THREADS
 #define MAX_WORKER_THREADS (1024 * 64)
@@ -299,12 +295,8 @@ typedef long off_t;
 #define STRX(x) #x
 #define STR(x) STRX(x)
 #define __func__ __FILE__ ":" STR(__LINE__)
-#define strtoull(x, y, z) ((unsigned __int64)_atoi64(x))
-#define strtoll(x, y, z) (_atoi64(x))
 #else
 #define __func__ __FUNCTION__
-#define strtoull(x, y, z) (_strtoui64(x, y, z))
-#define strtoll(x, y, z) (_strtoi64(x, y, z))
 #endif
 #endif /* _MSC_VER */
 
@@ -1945,9 +1937,9 @@ struct mg_connection {
 				   * established */
 	struct timespec req_time; /* Time (since system start) when the request
 				   * was received */
-	int64_t num_bytes_sent;   /* Total bytes sent to client */
-	int64_t content_len;      /* Content-Length header value */
-	int64_t consumed_content; /* How many bytes of content have been read */
+	unsigned int num_bytes_sent;   /* Total bytes sent to client */
+	int content_len;      /* Content-Length header value */
+	unsigned int consumed_content; /* How many bytes of content have been read */
 	int is_chunked;           /* Transfer-Encoding is chunked: 0=no, 1=yes:
 				   * data available, 2: all data read */
 	size_t chunk_remainder;   /* Unread data from the last chunk */
@@ -1963,7 +1955,7 @@ struct mg_connection {
 	int throttle;         /* Throttling, bytes/sec. <= 0 means no
 			       * throttle */
 	time_t last_throttle_time;   /* Last time throttled data was sent */
-	int64_t last_throttle_bytes; /* Bytes sent this second */
+	unsigned int last_throttle_bytes; /* Bytes sent this second */
 	pthread_mutex_t mutex;       /* Used by mg_(un)lock_connection to ensure
 				      * atomic transmissions for websockets */
 
@@ -4164,16 +4156,16 @@ push_inner(struct mg_context *ctx,
 }
 
 
-static int64_t
+static unsigned int
 push_all(struct mg_context *ctx,
 	 FILE *fp,
 	 SOCKET sock,
 	 SSL *ssl,
 	 const char *buf,
-	 int64_t len)
+	 size_t len)
 {
 	int timeout = -1;
-	int64_t n, nwritten = 0;
+	unsigned int n, nwritten = 0;
 
 	if (ctx == NULL) {
 		return -1;
@@ -4459,7 +4451,7 @@ discard_unread_request_data(struct mg_connection *conn)
 
 	} else {
 		/* Not chunked: content length is known */
-		while (conn->consumed_content < conn->content_len) {
+		while (conn->consumed_content < (unsigned int)conn->content_len) {
 			if (to_read
 			    > (size_t)(conn->content_len - conn->consumed_content)) {
 				to_read = (size_t)(conn->content_len - conn->consumed_content);
@@ -4477,11 +4469,11 @@ discard_unread_request_data(struct mg_connection *conn)
 static int
 mg_read_inner(struct mg_connection *conn, void *buf, size_t len)
 {
-	int64_t n, buffered_len, nread;
-	int64_t len64 =
-	    (int64_t)((len > INT_MAX) ? INT_MAX : len); /* since the return value is
-						       * int, we may not read more
-						       * bytes */
+	unsigned int n, buffered_len, nread;
+	unsigned int len64 =
+	    (len > INT_MAX) ? INT_MAX : len; /* since the return value is
+					      * int, we may not read more
+					      * bytes */
 	const char *body;
 
 	if (conn == NULL) {
@@ -4491,14 +4483,14 @@ mg_read_inner(struct mg_connection *conn, void *buf, size_t len)
 	/* If Content-Length is not set for a PUT or POST request, read until
 	 * socket is closed */
 	if ((conn->consumed_content) == 0 && (conn->content_len == -1)) {
-		conn->content_len = INT64_MAX;
+		conn->content_len = INT_MAX;
 		conn->must_close = 1;
 	}
 
 	nread = 0;
-	if (conn->consumed_content < conn->content_len) {
+	if (conn->consumed_content < (unsigned int)conn->content_len) {
 		/* Adjust number of bytes to read. */
-		int64_t left_to_read = conn->content_len - conn->consumed_content;
+		unsigned int left_to_read = conn->content_len - conn->consumed_content;
 		if (left_to_read < len64) {
 			/* Do not read more than the total content length of the request.
 			 */
@@ -4506,7 +4498,7 @@ mg_read_inner(struct mg_connection *conn, void *buf, size_t len)
 		}
 
 		/* Return buffered data */
-		buffered_len = (int64_t)(conn->data_len) - (int64_t)conn->request_len
+		buffered_len = conn->data_len - conn->request_len
 			       - conn->consumed_content;
 		if (buffered_len > 0) {
 			if (len64 < buffered_len) {
@@ -4650,7 +4642,7 @@ int
 mg_write(struct mg_connection *conn, const void *buf, size_t len)
 {
 	time_t now;
-	int64_t n, total, allowed;
+	unsigned int n, total, allowed;
 
 	if (conn == NULL) {
 		return 0;
@@ -4662,27 +4654,27 @@ mg_write(struct mg_connection *conn, const void *buf, size_t len)
 			conn->last_throttle_bytes = 0;
 		}
 		allowed = conn->throttle - conn->last_throttle_bytes;
-		if (allowed > (int64_t)len) {
-			allowed = (int64_t)len;
+		if (allowed > len) {
+			allowed = len;
 		}
 		if ((total = push_all(conn->ctx,
 				      NULL,
 				      conn->client.sock,
 				      conn->ssl,
 				      (const char *)buf,
-				      (int64_t)allowed)) == allowed) {
+				      allowed)) == allowed) {
 			buf = (const char *)buf + total;
 			conn->last_throttle_bytes += total;
-			while ((total < (int64_t)len) && (conn->ctx->stop_flag == 0)) {
-				allowed = (conn->throttle > ((int64_t)len - total))
-					      ? (int64_t)len - total
+			while ((total < len) && (conn->ctx->stop_flag == 0)) {
+				allowed = (conn->throttle > (int)(len - total))
+					      ? len - total
 					      : conn->throttle;
 				if ((n = push_all(conn->ctx,
 						  NULL,
 						  conn->client.sock,
 						  conn->ssl,
 						  (const char *)buf,
-						  (int64_t)allowed)) != allowed) {
+						  allowed)) != allowed) {
 					break;
 				}
 				sleep(1);
@@ -4698,7 +4690,7 @@ mg_write(struct mg_connection *conn, const void *buf, size_t len)
 				 conn->client.sock,
 				 conn->ssl,
 				 (const char *)buf,
-				 (int64_t)len);
+				 len);
 	}
 	if (total > 0) {
 		conn->num_bytes_sent += total;
@@ -5550,13 +5542,6 @@ realloc2(void *ptr, size_t size)
 }
 
 
-static int
-parse_range_header(const char *header, int64_t *a, int64_t *b)
-{
-	return sscanf(header, "bytes=%" INT64_FMT "-%" INT64_FMT, a, b);
-}
-
-
 /* Parse a buffer:
  * Forward the string pointer till the end of a word, then
  * terminate it and forward till the begin of the next word.
@@ -6101,7 +6086,7 @@ read_websocket(struct mg_connection *conn,
 	if (conn->ctx->config[WEBSOCKET_TIMEOUT]) {
 		timeout = atoi(conn->ctx->config[WEBSOCKET_TIMEOUT]);
 	}
-	if ((timeout <= 0.0) && (conn->ctx->config[REQUEST_TIMEOUT])) {
+	if ((timeout <= 0) && (conn->ctx->config[REQUEST_TIMEOUT])) {
 		timeout = atoi(conn->ctx->config[REQUEST_TIMEOUT]);
 	}
 
@@ -8046,7 +8031,7 @@ log_access(const struct mg_connection *conn)
 		    NULL, /* Ignore truncation in access log */
 		    buf,
 		    sizeof(buf),
-		    "%s - %s [%s] \"%s %s%s%s HTTP/%s\" %d %" INT64_FMT " %s %s",
+		    "%s - %s [%s] \"%s %s%s%s HTTP/%s\" %d %d %s %s",
 		    src_addr,
 		    (ri->remote_user == NULL) ? "-" : ri->remote_user,
 		    date,
@@ -9789,7 +9774,7 @@ get_request(struct mg_connection *conn, char *ebuf, size_t ebuf_len, int *err)
 			     "Content-Length")) != NULL) {
 		/* Request/response has content length set */
 		char *endptr = NULL;
-		conn->content_len = strtoll(cl, &endptr, 10);
+		conn->content_len = strtol(cl, &endptr, 10);
 		if (endptr == cl) {
 			mg_snprintf(conn,
 				    NULL, /* No truncation check for ebuf */
@@ -9851,7 +9836,7 @@ get_response(struct mg_connection *conn, char *ebuf, size_t ebuf_len, int *err)
 			     "Content-Length")) != NULL) {
 		/* Request/response has content length set */
 		char *endptr = NULL;
-		conn->content_len = strtoll(cl, &endptr, 10);
+		conn->content_len = strtol(cl, &endptr, 10);
 		if (endptr == cl) {
 			mg_snprintf(conn,
 				    NULL, /* No truncation check for ebuf */
@@ -10313,7 +10298,7 @@ process_new_connection(struct mg_connection *conn)
 			/* Discard all buffered data for this request */
 			discard_len = ((conn->content_len >= 0) && (conn->request_len > 0)
 				       && ((conn->request_len + conn->content_len)
-					   < (int64_t)conn->data_len))
+					   < conn->data_len))
 					  ? (int)(conn->request_len + conn->content_len)
 					  : conn->data_len;
 			/*assert(discard_len >= 0);*/
