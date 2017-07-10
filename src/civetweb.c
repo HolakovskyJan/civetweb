@@ -4040,29 +4040,35 @@ push_inner(struct mg_context *ctx,
 
 		/* Only in case n=0 (timeout), repeat calling the write function */
 
-		/* Quick fix for #474 */
-		(void)ms_wait;
-		mg_sleep(1);
+		/* For sockets, wait for the socket using select */
+		fd_set wfds;
+		struct timeval tv;
+		int sret;
 
-		/* Alternatively, use select (TODO: test):
-		 * {
-		 * fd_set wfds;
-		 * struct timeval tv;
-		 * int sret;
-		 *
-		 * FD_ZERO(&wfds);
-		 * FD_SET(sock, &wfds);
-		 * tv.tv_sec = ms_wait / 1000;
-		 * tv.tv_usec = (ms_wait % 1000) * 1000;
-		 *
-		 * sret = select(sock+ 1, NULL, &wfds, NULL, &tv);
-		 *
-		 * if (sret > 0) {
-		 *     continue;
-		 * }
-		 *
-		 * }
-		 */
+#if defined(__GNUC__) || defined(__MINGW32__)
+		/* GCC seems to have a flaw with it's own socket macros:
+		* http://www.linuxquestions.org/questions/programming-9/impossible-to-use-gcc-with-wconversion-and-standard-socket-macros-841935/
+		*/
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#endif
+
+		FD_ZERO(&wfds);
+		FD_SET(sock, &wfds);
+		tv.tv_sec = (time_t)(ms_wait / 1000);
+		tv.tv_usec = (long)((ms_wait % 1000) * 1000);
+
+		sret = select((int)sock + 1, NULL, &wfds, NULL, &tv);
+
+#if defined(__GNUC__) || defined(__MINGW32__)
+#pragma GCC diagnostic pop
+#endif
+
+		if (sret > 0) {
+			/* We got ready to write. Don't check the timeout
+			* but directly go back to write again. */
+			continue;
+		}
 
 		if (timeout >= 0) {
 			now = mg_get_current_time_ms();
