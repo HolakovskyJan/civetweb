@@ -709,35 +709,28 @@ log_message(const struct mg_connection *conn, const char *message)
 int
 main(int argc, char *argv[])
 {
-	const char *options[] = {
-	    "listening_ports",
-	    PORT,
-	    "request_timeout_ms",
-	    "10000",
-#ifdef USE_WEBSOCKET
-	    "websocket_timeout_ms",
-	    "3600000",
-#endif
-#ifndef NO_SSL
-	    "ssl_certificate",
-	    "../../resources/cert/server.pem",
-	    "ssl_protocol_version",
-	    "3",
-	    "ssl_cipher_list",
-#ifdef USE_SSL_DH
-	    "ECDHE-RSA-AES256-GCM-SHA384:DES-CBC3-SHA:AES128-SHA:AES128-GCM-SHA256",
-#else
-	    "DES-CBC3-SHA:AES128-SHA:AES128-GCM-SHA256",
-#endif
-#endif
-	    "enable_auth_domain_check",
-	    "no",
-	    0};
+	struct mg_config options = { 0, };
 	struct mg_callbacks callbacks;
 	struct mg_context *ctx;
 	struct mg_server_ports ports[32];
 	int port_cnt, n;
 	int err = 0;
+
+	options.listening_ports = PORT;
+	options.request_timeout = 10000;
+#ifdef USE_WEBSOCKET
+	options.websocket_timeout = 3600000;
+#endif
+#ifndef NO_SSL
+	options.ssl_certificate = "../../resources/cert/server.pem";
+	options.ssl_protocol_version = 3;
+	options.ssl_cipher_list =
+#ifdef USE_SSL_DH
+		"ECDHE-RSA-AES256-GCM-SHA384:DES-CBC3-SHA:AES128-SHA:AES128-GCM-SHA256";
+#else
+		"DES-CBC3-SHA:AES128-SHA:AES128-GCM-SHA256";
+#endif
+#endif
 
 /* Check if libcivetweb has been built with all required features. */
 #ifdef USE_IPV6
@@ -775,7 +768,7 @@ main(int argc, char *argv[])
 	callbacks.init_ssl = init_ssl;
 #endif
 	callbacks.log_message = log_message;
-	ctx = mg_start(&callbacks, 0, options);
+	ctx = mg_start(&callbacks, 0, &options);
 
 	/* Check return value: */
 	if (ctx == NULL) {
