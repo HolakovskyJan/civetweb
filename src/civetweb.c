@@ -2151,30 +2151,6 @@ mg_get_user_connection_data(const struct mg_connection *conn)
 }
 
 
-#if defined(MG_LEGACY_INTERFACE)
-/* Deprecated: Use mg_get_server_ports instead. */
-size_t
-mg_get_ports(const struct mg_context *ctx, size_t size, int *ports, int *ssl)
-{
-	size_t i;
-	if (!ctx) {
-		return 0;
-	}
-	for (i = 0; i < size && i < ctx->num_listening_sockets; i++) {
-		ssl[i] = ctx->listening_sockets[i].is_ssl;
-		ports[i] =
-#if defined(USE_IPV6)
-		    (ctx->listening_sockets[i].lsa.sa.sa_family == AF_INET6)
-			? ntohs(ctx->listening_sockets[i].lsa.sin6.sin6_port)
-			:
-#endif
-			ntohs(ctx->listening_sockets[i].lsa.sin.sin_port);
-	}
-	return i;
-}
-#endif
-
-
 int
 mg_get_server_ports(const struct mg_context *ctx,
 		    int size,
@@ -6367,104 +6343,6 @@ get_remote_ip(const struct mg_connection *conn)
 }
 
 
-#if defined(MG_LEGACY_INTERFACE)
-/* Implement the deprecated mg_upload function by calling the new
- * mg_handle_form_request function. While mg_upload could only handle
- * HTML forms sent as POST request in multipart/form-data format
- * containing only file input elements, mg_handle_form_request can
- * handle all form input elements and all standard request methods. */
-struct mg_upload_user_data {
-	struct mg_connection *conn;
-	const char *destination_dir;
-	int num_uploaded_files;
-};
-
-
-/* Helper function for deprecated mg_upload. */
-static int
-mg_upload_field_found(const char *key,
-		      const char *filename,
-		      char *path,
-		      size_t pathlen,
-		      void *user_data)
-{
-	int truncated = 0;
-	struct mg_upload_user_data *fud = (struct mg_upload_user_data *)user_data;
-	(void)key;
-
-	if (!filename) {
-		mg_cry(fud->conn, "%s: No filename set", __func__);
-		return FORM_FIELD_STORAGE_ABORT;
-	}
-	mg_snprintf(fud->conn,
-		    &truncated,
-		    path,
-		    pathlen - 1,
-		    "%s/%s",
-		    fud->destination_dir,
-		    filename);
-	if (!truncated) {
-		mg_cry(fud->conn, "%s: File path too long", __func__);
-		return FORM_FIELD_STORAGE_ABORT;
-	}
-	return FORM_FIELD_STORAGE_STORE;
-}
-
-
-/* Helper function for deprecated mg_upload. */
-static int
-mg_upload_field_get(const char *key,
-		    const char *value,
-		    size_t value_size,
-		    void *user_data)
-{
-	/* Function should never be called */
-	(void)key;
-	(void)value;
-	(void)value_size;
-	(void)user_data;
-
-	return 0;
-}
-
-
-/* Helper function for deprecated mg_upload. */
-static int
-mg_upload_field_stored(const char *path, long long file_size, void *user_data)
-{
-	struct mg_upload_user_data *fud = (struct mg_upload_user_data *)user_data;
-	(void)file_size;
-
-	fud->num_uploaded_files++;
-	fud->conn->ctx->callbacks.upload(fud->conn, path);
-
-	return 0;
-}
-
-
-/* Deprecated function mg_upload - use mg_handle_form_request instead. */
-int
-mg_upload(struct mg_connection *conn, const char *destination_dir)
-{
-	struct mg_upload_user_data fud = {conn, destination_dir, 0};
-	struct mg_form_data_handler fdh = {mg_upload_field_found,
-					   mg_upload_field_get,
-					   mg_upload_field_stored,
-					   0};
-	int ret;
-
-	fdh.user_data = (void *)&fud;
-	ret = mg_handle_form_request(conn, &fdh);
-
-	if (ret < 0) {
-		mg_cry(conn, "%s: Error while parsing the request", __func__);
-	}
-
-	return fud.num_uploaded_files;
-}
-#endif
-
-
 static int
 get_first_ssl_listener_index(const struct mg_context *ctx)
 {
@@ -6884,47 +6762,6 @@ is_in_script_path(const struct mg_connection *conn, const char *path)
 }
 
 
-#if defined(USE_WEBSOCKET) && defined(MG_LEGACY_INTERFACE)
-static int
-deprecated_websocket_connect_wrapper(const struct mg_connection *conn,
-				     void *cbdata)
-{
-	struct mg_callbacks *pcallbacks = (struct mg_callbacks *)cbdata;
-	if (pcallbacks->websocket_connect) {
-		return pcallbacks->websocket_connect(conn);
-	}
-	/* No handler set - assume "OK" */
-	return 0;
-}
-
-
-static void
-deprecated_websocket_ready_wrapper(struct mg_connection *conn, void *cbdata)
-{
-	struct mg_callbacks *pcallbacks = (struct mg_callbacks *)cbdata;
-	if (pcallbacks->websocket_ready) {
-		pcallbacks->websocket_ready(conn);
-	}
-}
-
-
-static int
-deprecated_websocket_data_wrapper(struct mg_connection *conn,
-				  int bits,
-				  char *data,
-				  size_t len,
-				  void *cbdata)
-{
-	struct mg_callbacks *pcallbacks = (struct mg_callbacks *)cbdata;
-	if (pcallbacks->websocket_data) {
-		return pcallbacks->websocket_data(conn, bits, data, len);
-	}
-	/* No handler set - assume "OK" */
-	return 1;
-}
-#endif
-
-
 /* This is the heart of the Civetweb's logic.
  * This function is called when the request is read, parsed and validated,
  * and Civetweb must decide what action to take: serve a file, or
@@ -7246,20 +7083,7 @@ handle_request(struct mg_connection *conn)
 				mg_send_http_error(conn, 403, "%s", "Forbidden");
 			}
 		} else {
-#if defined(MG_LEGACY_INTERFACE)
-			handle_websocket_request(
-			    conn,
-			    path,
-			    !is_script_resource /* could be deprecated global callback */,
-			    NULL,
-			    deprecated_websocket_connect_wrapper,
-			    deprecated_websocket_ready_wrapper,
-			    deprecated_websocket_data_wrapper,
-			    NULL,
-			    &conn->ctx->callbacks);
-#else
 			mg_send_http_error(conn, 404, "%s", "Not found");
-#endif
 		}
 		return;
 	} else
@@ -8647,11 +8471,6 @@ reset_per_request_attributes(struct mg_connection *conn)
 	conn->request_info.request_method = NULL;
 	conn->request_info.request_uri = NULL;
 	conn->request_info.local_uri = NULL;
-
-#if defined(MG_LEGACY_INTERFACE)
-	/* Legacy before split into local_uri and request_uri */
-	conn->request_info.uri = NULL;
-#endif
 }
 
 
@@ -9558,11 +9377,6 @@ mg_get_response(struct mg_connection *conn,
 	ret = get_response(conn, ebuf, ebuf_len, &err);
 	conn->ctx = octx;
 
-#if defined(MG_LEGACY_INTERFACE)
-	/* TODO: 1) uri is deprecated;
-	 *       2) here, ri.uri is the http response code */
-	conn->request_info.uri = conn->request_info.request_uri;
-#endif
 	conn->request_info.local_uri = conn->request_info.request_uri;
 
 	/* TODO (mid): Define proper return values - maybe return length?
@@ -9606,11 +9420,6 @@ mg_download(const char *host,
 		} else {
 			get_response(conn, ebuf, ebuf_len, &reqerr);
 
-#if defined(MG_LEGACY_INTERFACE)
-			/* TODO: 1) uri is deprecated;
-			 *       2) here, ri.uri is the http response code */
-			conn->request_info.uri = conn->request_info.request_uri;
-#endif
 			conn->request_info.local_uri = conn->request_info.request_uri;
 		}
 	}
@@ -9894,11 +9703,6 @@ process_new_connection(struct mg_connection *conn)
 					conn->request_info.local_uri = NULL;
 					break;
 				}
-
-#if defined(MG_LEGACY_INTERFACE)
-				/* Legacy before split into local_uri and request_uri */
-				conn->request_info.uri = conn->request_info.local_uri;
-#endif
 			}
 
 			DEBUG_TRACE("http: %s, error: %s",
@@ -10103,9 +9907,6 @@ worker_thread_run(struct worker_thread_args *thread_args)
 	struct mg_context *ctx = thread_args->ctx;
 	struct mg_connection *conn;
 	struct mg_workerTLS tls;
-#if defined(MG_LEGACY_INTERFACE)
-	uint32_t addr;
-#endif
 
 	mg_set_thread_name("worker");
 
@@ -10181,12 +9982,6 @@ worker_thread_run(struct worker_thread_args *thread_args)
 
 		DEBUG_TRACE("Start processing connection from %s",
 			    conn->request_info.remote_addr);
-
-#if defined(MG_LEGACY_INTERFACE)
-		/* This legacy interface only works for the IPv4 case */
-		addr = ntohl(conn->client.rsa.sin.sin_addr.s_addr);
-		memcpy(&conn->request_info.remote_ip, &addr, 4);
-#endif
 
 		conn->request_info.is_ssl = conn->client.is_ssl;
 
@@ -11110,9 +10905,6 @@ mg_check_feature(unsigned feature)
 
 /* Set some extra bits not defined in the API documentation.
  * These bits may change without further notice. */
-#if defined(MG_LEGACY_INTERFACE)
-					    | 0x8000u
-#endif
 #if defined(MEMORY_DEBUGGING)
 					    | 0x0100u
 #endif
