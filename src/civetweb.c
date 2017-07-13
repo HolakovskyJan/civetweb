@@ -209,7 +209,6 @@ _civet_safe_clock_gettime(int clk_id, struct timespec *t)
 #include <ctype.h>
 #include <limits.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <stdint.h>
 
 
@@ -317,7 +316,6 @@ typedef long off_t;
 #define vsnprintf_impl _vsnprintf
 #define mg_sleep(x) (Sleep(x))
 
-#define pipe(x) _pipe(x, MG_BUF_LEN, _O_BINARY)
 #define close(x) (_close(x))
 #define dlsym(x, y) (GetProcAddress((HINSTANCE)(x), (y)))
 #define RTLD_LAZY (0)
