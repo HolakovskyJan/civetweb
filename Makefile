@@ -49,13 +49,6 @@ ifdef WITH_WEBSOCKETS
   CFLAGS += -DUSE_WEBSOCKET
 endif
 
-ifdef WITH_SERVER_STAT
-  CFLAGS += -DUSE_SERVER_STATS
-endif
-ifdef WITH_SERVER_STATS
-  CFLAGS += -DUSE_SERVER_STATS
-endif
-
 ifdef SSL_LIB
   CFLAGS += -DSSL_LIB=\"$(SSL_LIB)\"
 endif
@@ -100,7 +93,6 @@ help:
 	@echo "   WITH_DEBUG=1          build with GDB debug support"
 	@echo "   WITH_IPV6=1           with IPV6 support"
 	@echo "   WITH_WEBSOCKET=1      build with web socket support"
-	@echo "   WITH_SERVER_STATS=1   build includes support for server statistics"
 	@echo "   SSL_LIB=libssl.so.0   use versioned SSL library"
 	@echo "   CRYPTO_LIB=libcrypto.so.0 system versioned CRYPTO library"
 	@echo "   PREFIX=/usr/local     sets the install directory"

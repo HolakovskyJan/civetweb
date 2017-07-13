@@ -739,24 +739,6 @@ mg_atomic_dec(volatile int *addr)
 #endif
 
 
-#if defined(USE_SERVER_STATS)
-static int64_t
-mg_atomic_add(volatile int64_t *addr, int64_t value)
-{
-	int64_t ret;
-#if defined(_WIN32) && !defined(__SYMBIAN32__)
-	ret = InterlockedAdd64(addr, value);
-#elif defined(__GNUC__)                                                        \
-    && ((__GNUC__ > 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ > 0)))
-	ret = __sync_add_and_fetch(addr, value);
-#else
-	ret = (++(*addr));
-#endif
-	return ret;
-}
-#endif
-
-
 #if defined(__GNUC__)
 /* Show no warning in case system functions are not used. */
 #if GCC_VERSION >= 40500
@@ -768,220 +750,6 @@ mg_atomic_add(volatile int64_t *addr, int64_t value)
 #pragma clang diagnostic pop
 #endif
 
-
-#if defined(USE_SERVER_STATS)
-
-struct mg_memory_stat {
-	volatile int64_t totalMemUsed;
-	volatile int64_t maxMemUsed;
-	volatile int blockCount;
-};
-
-
-static struct mg_memory_stat *get_memory_stat(struct mg_context *ctx);
-
-
-static void *
-mg_malloc_ex(size_t size,
-	     struct mg_context *ctx,
-	     const char *file,
-	     unsigned line)
-{
-	void *data = malloc(size + 2 * sizeof(uintptr_t));
-	void *memory = 0;
-	struct mg_memory_stat *mstat = get_memory_stat(ctx);
-
-#if defined(MEMORY_DEBUGGING)
-	char mallocStr[256];
-#else
-	(void)file;
-	(void)line;
-#endif
-
-	if (data) {
-		int64_t mmem = mg_atomic_add(&mstat->totalMemUsed, (int64_t)size);
-		if (mmem > mstat->maxMemUsed) {
-			/* could use atomic compare exchange, but this
-			 * seems overkill for statistics data */
-			mstat->maxMemUsed = mmem;
-		}
-
-		mg_atomic_inc(&mstat->blockCount);
-		((uintptr_t *)data)[0] = size;
-		((uintptr_t *)data)[1] = (uintptr_t)mstat;
-		memory = (void *)(((char *)data) + 2 * sizeof(uintptr_t));
-	}
-
-#if defined(MEMORY_DEBUGGING)
-	sprintf(mallocStr,
-		"MEM: %p %5lu alloc   %7lu %4lu --- %s:%u\n",
-		memory,
-		(unsigned long)size,
-		(unsigned long)mstat->totalMemUsed,
-		(unsigned long)mstat->blockCount,
-		file,
-		line);
-#if defined(_WIN32)
-	OutputDebugStringA(mallocStr);
-#else
-	DEBUG_TRACE("%s", mallocStr);
-#endif
-#endif
-
-	return memory;
-}
-
-
-static void *
-mg_calloc_ex(size_t count,
-	     size_t size,
-	     struct mg_context *ctx,
-	     const char *file,
-	     unsigned line)
-{
-	void *data = mg_malloc_ex(size * count, ctx, file, line);
-
-	if (data) {
-		memset(data, 0, size * count);
-	}
-	return data;
-}
-
-
-static void
-mg_free_ex(void *memory, const char *file, unsigned line)
-{
-	void *data = (void *)(((char *)memory) - 2 * sizeof(uintptr_t));
-
-
-#if defined(MEMORY_DEBUGGING)
-	char mallocStr[256];
-#else
-	(void)file;
-	(void)line;
-#endif
-
-	if (memory) {
-		uintptr_t size = ((uintptr_t *)data)[0];
-		struct mg_memory_stat *mstat =
-		    (struct mg_memory_stat *)(((uintptr_t *)data)[1]);
-		mg_atomic_add(&mstat->totalMemUsed, -(int64_t)size);
-		mg_atomic_dec(&mstat->blockCount);
-#if defined(MEMORY_DEBUGGING)
-		sprintf(mallocStr,
-			"MEM: %p %5lu free    %7lu %4lu --- %s:%u\n",
-			memory,
-			(unsigned long)size,
-			(unsigned long)mstat->totalMemUsed,
-			(unsigned long)mstat->blockCount,
-			file,
-			line);
-#if defined(_WIN32)
-		OutputDebugStringA(mallocStr);
-#else
-		DEBUG_TRACE("%s", mallocStr);
-#endif
-#endif
-		free(data);
-	}
-}
-
-
-static void *
-mg_realloc_ex(void *memory,
-	      size_t newsize,
-	      struct mg_context *ctx,
-	      const char *file,
-	      unsigned line)
-{
-	void *data;
-	void *_realloc;
-	uintptr_t oldsize;
-
-#if defined(MEMORY_DEBUGGING)
-	char mallocStr[256];
-#else
-	(void)file;
-	(void)line;
-#endif
-
-	if (newsize) {
-		if (memory) {
-			/* Reallocate existing block */
-			struct mg_memory_stat *mstat;
-			data = (void *)(((char *)memory) - 2 * sizeof(uintptr_t));
-			oldsize = ((uintptr_t *)data)[0];
-			mstat = (struct mg_memory_stat *)((uintptr_t *)data)[1];
-			_realloc = realloc(data, newsize + 2 * sizeof(uintptr_t));
-			if (_realloc) {
-				data = _realloc;
-				mg_atomic_add(&mstat->totalMemUsed, -(int64_t)oldsize);
-#if defined(MEMORY_DEBUGGING)
-				sprintf(mallocStr,
-					"MEM: %p %5lu r-free  %7lu %4lu --- %s:%u\n",
-					memory,
-					(unsigned long)oldsize,
-					(unsigned long)mstat->totalMemUsed,
-					(unsigned long)mstat->blockCount,
-					file,
-					line);
-#if defined(_WIN32)
-				OutputDebugStringA(mallocStr);
-#else
-				DEBUG_TRACE("%s", mallocStr);
-#endif
-#endif
-				mg_atomic_add(&mstat->totalMemUsed, (int64_t)newsize);
-#if defined(MEMORY_DEBUGGING)
-				sprintf(mallocStr,
-					"MEM: %p %5lu r-alloc %7lu %4lu --- %s:%u\n",
-					memory,
-					(unsigned long)newsize,
-					(unsigned long)mstat->totalMemUsed,
-					(unsigned long)mstat->blockCount,
-					file,
-					line);
-#if defined(_WIN32)
-				OutputDebugStringA(mallocStr);
-#else
-				DEBUG_TRACE("%s", mallocStr);
-#endif
-#endif
-				*(uintptr_t *)data = newsize;
-				data = (void *)(((char *)data) + 2 * sizeof(uintptr_t));
-			} else {
-#if defined(MEMORY_DEBUGGING)
-#if defined(_WIN32)
-				OutputDebugStringA("MEM: realloc failed\n");
-#else
-				DEBUG_TRACE("%s", "MEM: realloc failed\n");
-#endif
-#endif
-				return _realloc;
-			}
-		} else {
-			/* Allocate new block */
-			data = mg_malloc_ex(newsize, ctx, file, line);
-		}
-	} else {
-		/* Free existing block */
-		data = 0;
-		mg_free_ex(memory, file, line);
-	}
-
-	return data;
-}
-
-#define mg_malloc(a) mg_malloc_ex(a, NULL, __FILE__, __LINE__)
-#define mg_calloc(a, b) mg_calloc_ex(a, b, NULL, __FILE__, __LINE__)
-#define mg_realloc(a, b) mg_realloc_ex(a, b, NULL, __FILE__, __LINE__)
-#define mg_free(a) mg_free_ex(a, __FILE__, __LINE__)
-
-#define mg_malloc_ctx(a, c) mg_malloc_ex(a, c, __FILE__, __LINE__)
-#define mg_calloc_ctx(a, b, c) mg_calloc_ex(a, b, c, __FILE__, __LINE__)
-#define mg_realloc_ctx(a, b, c) mg_realloc_ex(a, b, c, __FILE__, __LINE__)
-
-#else /* USE_SERVER_STATS */
 
 static __inline void *
 mg_malloc(size_t a)
@@ -1011,8 +779,6 @@ mg_free(void *a)
 #define mg_calloc_ctx(a, b, c) mg_calloc(a, b)
 #define mg_realloc_ctx(a, b, c) mg_realloc(a, b)
 #define mg_free_ctx(a, c) mg_free(a)
-
-#endif /* USE_SERVER_STATS */
 
 
 static void mg_vsnprintf(const struct mg_connection *conn,
@@ -1705,29 +1471,7 @@ struct mg_context {
 
 	/* linked list of uri handlers */
 	struct mg_handler_info *handlers;
-
-#if defined(USE_SERVER_STATS)
-	int active_connections;
-	int max_connections;
-	int64_t total_connections;
-	int64_t total_requests;
-	struct mg_memory_stat ctx_memory;
-#endif
 };
-
-
-#if defined(USE_SERVER_STATS)
-static struct mg_memory_stat mg_common_memory = {0, 0, 0};
-
-static struct mg_memory_stat *
-get_memory_stat(struct mg_context *ctx)
-{
-	if (ctx) {
-		return &(ctx->ctx_memory);
-	}
-	return &mg_common_memory;
-}
-#endif
 
 
 struct mg_connection {
@@ -9630,16 +9374,6 @@ process_new_connection(struct mg_connection *conn)
 		const char *hostend;
 		int reqerr, uri_type;
 
-#if defined(USE_SERVER_STATS)
-		int mcon = mg_atomic_inc(&(conn->ctx->active_connections));
-		mg_atomic_add(&(conn->ctx->total_connections), 1);
-		if (mcon > (conn->ctx->max_connections)) {
-			/* could use atomic compare exchange, but this
-			 * seems overkill for statistics data */
-			conn->ctx->max_connections = mcon;
-		}
-#endif
-
 		/* Important: on new connection, reset the receiving buffer. Credit
 		 * goes to crule42. */
 		conn->data_len = 0;
@@ -9778,11 +9512,6 @@ process_new_connection(struct mg_connection *conn)
 			conn->handled_requests++;
 
 		} while (keep_alive);
-
-#if defined(USE_SERVER_STATS)
-		mg_atomic_add(&(conn->ctx->total_requests), conn->handled_requests);
-		mg_atomic_dec(&(conn->ctx->active_connections));
-#endif
 	}
 }
 
@@ -10897,9 +10626,6 @@ mg_check_feature(unsigned feature)
 #if defined(USE_WEBSOCKET)
 					    | 0x0010u
 #endif
-#if defined(USE_SERVER_STATS)
-					    | 0x0100u
-#endif
 
 /* Set some extra bits not defined in the API documentation.
  * These bits may change without further notice. */
@@ -11226,123 +10952,6 @@ mg_get_system_info_impl(char *buffer, int buflen)
 }
 
 
-#if defined(USE_SERVER_STATS)
-/* Get context information. It can be printed or stored by the caller.
- * Return the size of available information. */
-static int
-mg_get_context_info_impl(const struct mg_context *ctx, char *buffer, int buflen)
-
-{
-	char block[256];
-	int context_info_length = 0;
-
-#if defined(_WIN32)
-	const char *eol = "\r\n";
-#else
-	const char *eol = "\n";
-#endif
-	struct mg_memory_stat *ms = get_memory_stat((struct mg_context *)ctx);
-
-	const char *eoobj = "}";
-	int reserved_len = (int)strlen(eoobj) + (int)strlen(eol);
-
-	if ((buffer == NULL) || (buflen < 10)) {
-		buflen = 0;
-	}
-
-	mg_snprintf(NULL, NULL, block, sizeof(block), "{%s", eol);
-	context_info_length += (int)strlen(block);
-	if (context_info_length < buflen) {
-		strcat(buffer, block);
-	}
-
-	/* Memory information */
-	if (ms) {
-		mg_snprintf(NULL,
-			    NULL,
-			    block,
-			    sizeof(block),
-			    "\"memory\" : {%s"
-			    "\"blocks\" : %i,%s"
-			    "\"used\" : %" INT64_FMT ",%s"
-			    "\"maxUsed\" : %" INT64_FMT "%s"
-			    "}%s%s",
-			    eol,
-			    ms->blockCount,
-			    eol,
-			    ms->totalMemUsed,
-			    eol,
-			    ms->maxMemUsed,
-			    eol,
-			    (ctx ? "," : ""),
-			    eol);
-
-		context_info_length += (int)strlen(block);
-		if (context_info_length + reserved_len < buflen) {
-			strcat(buffer, block);
-		}
-	}
-
-
-	/* Connections information */
-	if (ctx) {
-		mg_snprintf(NULL,
-			    NULL,
-			    block,
-			    sizeof(block),
-			    "\"connections\" : {%s"
-			    "\"active\" : %i,%s"
-			    "\"maxActive\" : %i,%s"
-			    "\"total\" : %" INT64_FMT "%s"
-			    "},%s",
-			    eol,
-			    ctx->active_connections,
-			    eol,
-			    ctx->max_connections,
-			    eol,
-			    ctx->total_connections,
-			    eol,
-			    eol);
-
-		context_info_length += (int)strlen(block);
-		if (context_info_length + reserved_len < buflen) {
-			strcat(buffer, block);
-		}
-	}
-
-	/* Requests information */
-	if (ctx) {
-		mg_snprintf(NULL,
-			    NULL,
-			    block,
-			    sizeof(block),
-			    "\"requests\" : {%s"
-			    "\"total\" : %" INT64_FMT "%s"
-			    "}%s",
-			    eol,
-			    ctx->total_requests,
-			    eol,
-			    eol);
-
-		context_info_length += (int)strlen(block);
-		if (context_info_length + reserved_len < buflen) {
-			strcat(buffer, block);
-		}
-	}
-
-	if ((buflen > 0) && buffer && buffer[0]) {
-		if (context_info_length < buflen) {
-			strcat(buffer, eoobj);
-			strcat(buffer, eol);
-			context_info_length += reserved_len;
-		}
-	}
-
-	return context_info_length;
-}
-#endif
-
-
 /* Get system information. It can be printed or stored by the caller.
  * Return the size of available information. */
 int
@@ -11363,21 +10972,11 @@ mg_get_system_info(char *buffer, int buflen)
 int
 mg_get_context_info(const struct mg_context *ctx, char *buffer, int buflen)
 {
-#if defined(USE_SERVER_STATS)
-	if ((buffer == NULL) || (buflen < 1)) {
-		return mg_get_context_info_impl(ctx, NULL, 0);
-	} else {
-		/* Reset buffer, so we can always use strcat. */
-		buffer[0] = 0;
-		return mg_get_context_info_impl(ctx, buffer, buflen);
-	}
-#else
 	(void)ctx;
 	if ((buffer != NULL) && (buflen > 0)) {
 		buffer[0] = 0;
 	}
 	return 0;
-#endif
 }
 
 
