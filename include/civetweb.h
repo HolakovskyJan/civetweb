@@ -438,6 +438,11 @@ struct mg_config
 	   If set to 0, default value of 16384 will be used. */
 	int max_request_size;
 
+	/* Size of buffer allocated for websocket request in bytes.
+	
+	   If set to 0, default value of 2147418112 will be used. */
+	size_t max_websocket_request_size;
+
 	/* Number of worker threads. Civetweb handles each incoming connection in a
 	   separate thread. Therefore, the value of this option is effectively the number
 	   of concurrent HTTP connections Civetweb can handle.

@@ -224,6 +224,10 @@ _civet_safe_clock_gettime(int clk_id, struct timespec *t)
 #define DEFAULT_MAX_REQUEST_SIZE	16384
 #endif
 
+#ifndef DEFAULT_MAX_WEBSOCKET_REQUEST_SIZE
+#define DEFAULT_MAX_WEBSOCKET_REQUEST_SIZE	0x7fff0000
+#endif
+
 #define SHUTDOWN_RD (0)
 #define SHUTDOWN_WR (1)
 #define SHUTDOWN_BOTH (2)
@@ -5534,7 +5538,23 @@ read_websocket(struct mg_connection *conn,
 				memcpy(&l1, &buf[2], 4); /* Use memcpy for alignment */
 				memcpy(&l2, &buf[6], 4);
 				header_len = 10 + mask_len;
+/* handle size corectly on both 32/64 bit */
+#if SIZE_MAX > UINT_MAX
 				data_len = (((uint64_t)ntohl(l1)) << 32) + ntohl(l2);
+#else
+				data_len = ntohl(l2);
+
+				if (ntohl(l1) != 0)
+				{
+					mg_cry(conn, "websocket request out of system memory limit; closing connection");
+					break;
+				}
+#endif
+				if (data_len > conn->ctx->config.max_websocket_request_size)
+				{
+					mg_cry(conn, "websocket request out of memory limit; closing connection");
+					break;
+				}
 			}
 		}
 
@@ -5668,6 +5688,12 @@ mg_websocket_write_exec(struct mg_connection *conn,
 
 	int retval = -1;
 
+	if (dataLen > conn->ctx->config.max_websocket_request_size)
+	{
+		mg_cry(conn, "websocket request out of memory limit; closing connection");
+		return -1;
+	}
+
 #if defined(__GNUC__) || defined(__MINGW32__)
 /* Disable spurious conversion warning for GCC */
 #pragma GCC diagnostic push
@@ -5693,8 +5719,15 @@ mg_websocket_write_exec(struct mg_connection *conn,
 		headerLen = 4;
 	} else {
 		/* 64-bit length field */
+/* handle size corectly on both 32/64 bit */
+#if SIZE_MAX > UINT_MAX
 		uint32_t len1 = htonl((uint32_t)((uint64_t)dataLen >> 32));
 		uint32_t len2 = htonl((uint32_t)(dataLen & 0xFFFFFFFFu));
+#else
+		uint32_t len1 = 0;
+		uint32_t len2 = htonl(dataLen);
+#endif
+		
 		header[1] = 127;
 		memcpy(header + 2, &len1, 4);
 		memcpy(header + 6, &len2, 4);
@@ -10364,6 +10397,12 @@ mg_start(const struct mg_callbacks *callbacks,
 		ctx->config.max_request_size = options->max_request_size;
 	} else {
 		ctx->config.max_request_size = DEFAULT_MAX_REQUEST_SIZE;
+	}
+
+	if (options->max_websocket_request_size > 0) {
+		ctx->config.max_websocket_request_size = options->max_websocket_request_size;
+	} else {
+		ctx->config.max_websocket_request_size = DEFAULT_MAX_WEBSOCKET_REQUEST_SIZE;
 	}
 
 	if (options->num_threads > 0) {
