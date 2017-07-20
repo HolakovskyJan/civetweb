@@ -1049,23 +1049,6 @@ CIVETWEB_API int mg_strncasecmp(const char *s1, const char *s2, size_t len);
 enum { TIMEOUT_INFINITE = -1 };
 
 
-/* Wait for a response from the server
-   Parameters:
-     conn: connection
-     ebuf, ebuf_len: error message placeholder.
-     timeout: time to wait for a response in milliseconds (if < 0 then wait
-   forever)
-
-   Return:
-     On success, >= 0
-     On error/timeout, < 0
-*/
-CIVETWEB_API int mg_get_response(struct mg_connection *conn,
-				 char *ebuf,
-				 size_t ebuf_len,
-				 int timeout);
-
-
 /* Check which features where set when the civetweb library has been compiled.
    The function explicitly addresses compile time defines used when building
    the library - it does not mean, the feature has been initialized using a
