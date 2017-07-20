@@ -172,88 +172,6 @@ FooHandler(struct mg_connection *conn, void *cbdata)
 }
 
 
-int
-CloseHandler(struct mg_connection *conn, void *cbdata)
-{
-	/* Handler may access the request info using mg_get_request_info */
-	const struct mg_request_info *req_info = mg_get_request_info(conn);
-
-	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
-	          "close\r\n\r\n");
-	mg_printf(conn, "<html><body>");
-	mg_printf(conn,
-	          "<h2>This handler will close the connection in a second</h2>");
-#ifdef _WIN32
-	Sleep(1000);
-#else
-	sleep(1);
-#endif
-	mg_printf(conn, "bye");
-	printf("CloseHandler: close connection\n");
-	mg_close_connection(conn);
-	printf("CloseHandler: wait 10 sec\n");
-#ifdef _WIN32
-	Sleep(10000);
-#else
-	sleep(10);
-#endif
-	printf("CloseHandler: return from function\n");
-	return 1;
-}
-
-
-int
-field_found(const char *key,
-            const char *filename,
-            char *path,
-            size_t pathlen,
-            void *user_data)
-{
-	struct mg_connection *conn = (struct mg_connection *)user_data;
-
-	mg_printf(conn, "\r\n\r\n%s:\r\n", key);
-
-	if (filename && *filename) {
-#ifdef _WIN32
-		_snprintf(path, pathlen, "D:\\tmp\\%s", filename);
-#else
-		snprintf(path, pathlen, "/tmp/%s", filename);
-#endif
-		return FORM_FIELD_STORAGE_STORE;
-	}
-	return FORM_FIELD_STORAGE_GET;
-}
-
-
-int
-field_get(const char *key, const char *value, size_t valuelen, void *user_data)
-{
-	struct mg_connection *conn = (struct mg_connection *)user_data;
-
-	if (key[0]) {
-		mg_printf(conn, "%s = ", key);
-	}
-	mg_write(conn, value, valuelen);
-
-	return 0;
-}
-
-
-int
-field_stored(const char *path, long long file_size, void *user_data)
-{
-	struct mg_connection *conn = (struct mg_connection *)user_data;
-
-	mg_printf(conn,
-	          "stored as %s (%lu bytes)\r\n\r\n",
-	          path,
-	          (unsigned long)file_size);
-
-	return 0;
-}
-
-
 #define MD5_STATIC static
 #include "../src/md5.inl"
 
@@ -269,31 +187,6 @@ struct tfiles_checksums {
 	int index;
 	struct tfile_checksum file[MAX_FILES];
 };
-
-
-int
-field_disp_read_on_the_fly(const char *key,
-                           const char *filename,
-                           char *path,
-                           size_t pathlen,
-                           void *user_data)
-{
-	struct tfiles_checksums *context = (struct tfiles_checksums *)user_data;
-
-	(void)key;
-	(void)path;
-	(void)pathlen;
-
-	if (context->index < MAX_FILES) {
-		context->index++;
-		strncpy(context->file[context->index - 1].name, filename, 128);
-		context->file[context->index - 1].name[127] = 0;
-		context->file[context->index - 1].length = 0;
-		md5_init(&(context->file[context->index - 1].chksum));
-		return FORM_FIELD_STORAGE_GET;
-	}
-	return FORM_FIELD_STORAGE_ABORT;
-}
 
 
 int
@@ -791,9 +684,6 @@ main(int argc, char *argv[])
 
 	/* Add handler for all files with .foo extention */
 	mg_set_request_handler(ctx, "**.foo$", FooHandler, 0);
-
-	/* Add handler for /close extention */
-	mg_set_request_handler(ctx, "/close", CloseHandler, 0);
 
 	/* Add handler for /cookie example */
 	mg_set_request_handler(ctx, "/cookie", CookieHandler, 0);
