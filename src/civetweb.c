@@ -2832,21 +2832,6 @@ pthread_mutex_lock(pthread_mutex_t *mutex)
 }
 
 
-#ifdef ENABLE_UNUSED_PTHREAD_FUNCTIONS
-static int
-pthread_mutex_trylock(pthread_mutex_t *mutex)
-{
-	switch (WaitForSingleObject(*mutex, 0)) {
-	case WAIT_OBJECT_0:
-		return 0;
-	case WAIT_TIMEOUT:
-		return -2; /* EBUSY */
-	}
-	return -1;
-}
-#endif
-
-
 static int
 pthread_mutex_unlock(pthread_mutex_t *mutex)
 {
@@ -10170,17 +10155,12 @@ mg_get_system_info_impl(char *buffer, int buflen)
 			    NULL,
 			    block,
 			    sizeof(block),
-			    "Features: %X%s%s%s%s%s%s%s%s%s%s",
+			    "Features: %X%s%s%s%s%s",
 			    mg_check_feature(0xFFFFFFFFu),
 			    eol,
-			    mg_check_feature(1) ? " Files" : "",
 			    mg_check_feature(2) ? " HTTPS" : "",
-			    mg_check_feature(4) ? " CGI" : "",
 			    mg_check_feature(8) ? " IPv6" : "",
 			    mg_check_feature(16) ? " WebSockets" : "",
-			    mg_check_feature(32) ? " Lua" : "",
-			    mg_check_feature(64) ? " JavaScript" : "",
-			    mg_check_feature(128) ? " Cache" : "",
 			    eol);
 		system_info_length += (int)strlen(block);
 		if (system_info_length < buflen) {
@@ -10371,19 +10351,6 @@ mg_get_system_info(char *buffer, int buflen)
 		buffer[0] = 0;
 		return mg_get_system_info_impl(buffer, buflen);
 	}
-}
-
-
-/* Get context information. It can be printed or stored by the caller.
- * Return the size of available information. */
-int
-mg_get_context_info(const struct mg_context *ctx, char *buffer, int buflen)
-{
-	(void)ctx;
-	if ((buffer != NULL) && (buflen > 0)) {
-		buffer[0] = 0;
-	}
-	return 0;
 }
 
 

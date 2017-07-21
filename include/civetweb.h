@@ -1059,15 +1059,9 @@ enum { TIMEOUT_INFINITE = -1 };
    Parameters:
      feature: specifies which feature should be checked
        The value is a bit mask. The individual bits are defined as:
-	 1  serve files (NO_FILES not set)
 	 2  support HTTPS (NO_SSL not set)
-	 4  support CGI (NO_CGI not set)
 	 8  support IPv6 (USE_IPV6 set)
 	16  support WebSocket (USE_WEBSOCKET set)
-	32  support Lua scripts and Lua server pages (USE_LUA is set)
-	64  support server side JavaScript (USE_DUKTAPE is set)
-       128  support caching (NO_CACHING not set)
-       256  support server statistics (USE_SERVER_STATS is set)
        The result is undefined, if bits are set that do not represent a
        defined feature (currently: feature >= 512).
        The result is undefined, if no bit is set (feature == 0).
@@ -1093,23 +1087,6 @@ CIVETWEB_API unsigned mg_check_feature(unsigned feature);
 */
 CIVETWEB_API int mg_get_system_info(char *buffer, int buflen);
 
-
-/* Get context information. Useful for server diagnosis.
-   Parameters:
-     ctx: Context handle
-     buffer: Store context information here.
-     buflen: Length of buffer (including a byte required for a terminating 0).
-   Return:
-     Available size of system information, exluding a terminating 0.
-     The information is complete, if the return value is smaller than buflen.
-   Note:
-     It is possible to determine the required buflen, by first calling this
-     function with buffer = NULL and buflen = NULL. The required buflen is
-     one byte more than the returned value. However, since the available
-     context information changes, you should allocate a few bytes more.
-*/
-CIVETWEB_API int
-mg_get_context_info(const struct mg_context *ctx, char *buffer, int buflen);
 
 #ifdef __cplusplus
 }
