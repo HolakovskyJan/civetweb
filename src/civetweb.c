@@ -103,11 +103,11 @@ mg_static_assert(sizeof(void *) >= sizeof(int), "data type size check");
 #endif
 
 #ifndef _WIN32_WCE /* Some ANSI #includes are not available on Windows CE */
-#include <sys/types.h>
+//#include <sys/types.h>
 #include <sys/stat.h>
-#include <errno.h>
-#include <signal.h>
-#include <fcntl.h>
+//#include <errno.h>
+//#include <signal.h>
+//#include <fcntl.h>
 #endif /* !_WIN32_WCE */
 
 
@@ -203,12 +203,12 @@ _civet_safe_clock_gettime(int clk_id, struct timespec *t)
 
 #include <time.h>
 #include <stdlib.h>
-#include <stdarg.h>
+//#include <stdarg.h>
 #include <assert.h>
-#include <string.h>
-#include <ctype.h>
-#include <limits.h>
-#include <stddef.h>
+//#include <string.h>
+//#include <ctype.h>
+//#include <limits.h>
+//#include <stddef.h>
 #include <stdint.h>
 
 
@@ -5784,35 +5784,6 @@ mask_data(const char *in, size_t in_len, uint32_t masking_key, char *out)
 			i++;
 		}
 	}
-}
-
-
-int
-mg_websocket_client_write(struct mg_connection *conn,
-			  int opcode,
-			  const char *data,
-			  size_t dataLen)
-{
-	int retval = -1;
-	char *masked_data =
-	    (char *)mg_malloc_ctx(((dataLen + 7) / 4) * 4, conn->ctx);
-	uint32_t masking_key = get_random();
-
-	if (masked_data == NULL) {
-		/* Return -1 in an error case */
-		mg_cry(conn,
-		       "Cannot allocate buffer for masked websocket response: "
-		       "Out of memory");
-		return -1;
-	}
-
-	mask_data(data, dataLen, masking_key, masked_data);
-
-	retval = mg_websocket_write_exec(
-	    conn, opcode, masked_data, dataLen, masking_key);
-	mg_free(masked_data);
-
-	return retval;
 }
 
 
