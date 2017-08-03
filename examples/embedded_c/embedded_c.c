@@ -41,53 +41,53 @@ int
 ExampleHandler(struct mg_connection *conn, void *cbdata)
 {
 	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
-	          "close\r\n\r\n");
+		  "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
+		  "close\r\n\r\n");
 	mg_printf(conn, "<html><body>");
 	mg_printf(conn, "<h2>This is an example text from a C handler</h2>");
 	mg_printf(
 	    conn,
 	    "<p>To see a page from the A handler <a href=\"A\">click A</a></p>");
 	mg_printf(conn,
-	          "<p>To see a page from the A handler <a href=\"A/A\">click "
-	          "A/A</a></p>");
+		  "<p>To see a page from the A handler <a href=\"A/A\">click "
+		  "A/A</a></p>");
 	mg_printf(conn,
-	          "<p>To see a page from the A/B handler <a "
-	          "href=\"A/B\">click A/B</a></p>");
+		  "<p>To see a page from the A/B handler <a "
+		  "href=\"A/B\">click A/B</a></p>");
 	mg_printf(conn,
-	          "<p>To see a page from the B handler (0) <a "
-	          "href=\"B\">click B</a></p>");
+		  "<p>To see a page from the B handler (0) <a "
+		  "href=\"B\">click B</a></p>");
 	mg_printf(conn,
-	          "<p>To see a page from the B handler (1) <a "
-	          "href=\"B/A\">click B/A</a></p>");
+		  "<p>To see a page from the B handler (1) <a "
+		  "href=\"B/A\">click B/A</a></p>");
 	mg_printf(conn,
-	          "<p>To see a page from the B handler (2) <a "
-	          "href=\"B/B\">click B/B</a></p>");
+		  "<p>To see a page from the B handler (2) <a "
+		  "href=\"B/B\">click B/B</a></p>");
 	mg_printf(conn,
-	          "<p>To see a page from the *.foo handler <a "
-	          "href=\"xy.foo\">click xy.foo</a></p>");
+		  "<p>To see a page from the *.foo handler <a "
+		  "href=\"xy.foo\">click xy.foo</a></p>");
 	mg_printf(conn,
-	          "<p>To see a page from the close handler <a "
-	          "href=\"close\">click close</a></p>");
+		  "<p>To see a page from the close handler <a "
+		  "href=\"close\">click close</a></p>");
 	mg_printf(conn,
-	          "<p>To see a page from the FileHandler handler <a "
-	          "href=\"form\">click form</a> (the starting point of the "
-	          "<b>form</b> test)</p>");
+		  "<p>To see a page from the FileHandler handler <a "
+		  "href=\"form\">click form</a> (the starting point of the "
+		  "<b>form</b> test)</p>");
 	mg_printf(conn,
-	          "<p>To see a page from the CookieHandler handler <a "
-	          "href=\"cookie\">click cookie</a></p>");
+		  "<p>To see a page from the CookieHandler handler <a "
+		  "href=\"cookie\">click cookie</a></p>");
 	mg_printf(conn,
-	          "<p>To see a page from the PostResponser handler <a "
-	          "href=\"postresponse\">click post response</a></p>");
+		  "<p>To see a page from the PostResponser handler <a "
+		  "href=\"postresponse\">click post response</a></p>");
 	mg_printf(conn,
-	          "<p>To see an example for parsing files on the fly <a "
-	          "href=\"on_the_fly_form\">click form</a> (form for "
-	          "uploading files)</p>");
+		  "<p>To see an example for parsing files on the fly <a "
+		  "href=\"on_the_fly_form\">click form</a> (form for "
+		  "uploading files)</p>");
 
 #ifdef USE_WEBSOCKET
 	mg_printf(conn,
-	          "<p>To test websocket handler <a href=\"/websocket\">click "
-	          "websocket</a></p>");
+		  "<p>To test websocket handler <a href=\"/websocket\">click "
+		  "websocket</a></p>");
 #endif
 	mg_printf(conn, "<p>To exit <a href=\"%s\">click exit</a></p>", EXIT_URI);
 	mg_printf(conn, "</body></html>\n");
@@ -99,8 +99,8 @@ int
 ExitHandler(struct mg_connection *conn, void *cbdata)
 {
 	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: "
-	          "text/plain\r\nConnection: close\r\n\r\n");
+		  "HTTP/1.1 200 OK\r\nContent-Type: "
+		  "text/plain\r\nConnection: close\r\n\r\n");
 	mg_printf(conn, "Server will shut down.\n");
 	mg_printf(conn, "Bye!\n");
 	exitNow = 1;
@@ -112,8 +112,8 @@ int
 AHandler(struct mg_connection *conn, void *cbdata)
 {
 	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
-	          "close\r\n\r\n");
+		  "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
+		  "close\r\n\r\n");
 	mg_printf(conn, "<html><body>");
 	mg_printf(conn, "<h2>This is the A handler!!!</h2>");
 	mg_printf(conn, "</body></html>\n");
@@ -125,8 +125,8 @@ int
 ABHandler(struct mg_connection *conn, void *cbdata)
 {
 	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
-	          "close\r\n\r\n");
+		  "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
+		  "close\r\n\r\n");
 	mg_printf(conn, "<html><body>");
 	mg_printf(conn, "<h2>This is the AB handler!!!</h2>");
 	mg_printf(conn, "</body></html>\n");
@@ -141,8 +141,8 @@ BXHandler(struct mg_connection *conn, void *cbdata)
 	const struct mg_request_info *req_info = mg_get_request_info(conn);
 
 	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
-	          "close\r\n\r\n");
+		  "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
+		  "close\r\n\r\n");
 	mg_printf(conn, "<html><body>");
 	mg_printf(conn, "<h2>This is the BX handler %p!!!</h2>", cbdata);
 	mg_printf(conn, "<p>The actual uri is %s</p>", req_info->local_uri);
@@ -158,15 +158,15 @@ FooHandler(struct mg_connection *conn, void *cbdata)
 	const struct mg_request_info *req_info = mg_get_request_info(conn);
 
 	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
-	          "close\r\n\r\n");
+		  "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
+		  "close\r\n\r\n");
 	mg_printf(conn, "<html><body>");
 	mg_printf(conn, "<h2>This is the Foo handler!!!</h2>");
 	mg_printf(conn,
-	          "<p>The request was:<br><pre>%s %s HTTP/%s</pre></p>",
-	          req_info->request_method,
-	          req_info->local_uri,
-	          req_info->http_version);
+		  "<p>The request was:<br><pre>%s %s HTTP/%s</pre></p>",
+		  req_info->request_method,
+		  req_info->local_uri,
+		  req_info->http_version);
 	mg_printf(conn, "</body></html>\n");
 	return 1;
 }
@@ -191,17 +191,17 @@ struct tfiles_checksums {
 
 int
 field_get_checksum(const char *key,
-                   const char *value,
-                   size_t valuelen,
-                   void *user_data)
+		   const char *value,
+		   size_t valuelen,
+		   void *user_data)
 {
 	struct tfiles_checksums *context = (struct tfiles_checksums *)user_data;
 	(void)key;
 
 	context->file[context->index - 1].length += valuelen;
 	md5_append(&(context->file[context->index - 1].chksum),
-	           (const md5_byte_t *)value,
-	           valuelen);
+		   (const md5_byte_t *)value,
+		   valuelen);
 
 	return 0;
 }
@@ -224,13 +224,13 @@ CookieHandler(struct mg_connection *conn, void *cbdata)
 		time_t t = time(0);
 		struct tm *ptm = localtime(&t);
 		mg_printf(conn,
-		          "Set-Cookie: first=%04i-%02i-%02iT%02i:%02i:%02i\r\n",
-		          ptm->tm_year + 1900,
-		          ptm->tm_mon + 1,
-		          ptm->tm_mday,
-		          ptm->tm_hour,
-		          ptm->tm_min,
-		          ptm->tm_sec);
+			  "Set-Cookie: first=%04i-%02i-%02iT%02i:%02i:%02i\r\n",
+			  ptm->tm_year + 1900,
+			  ptm->tm_mon + 1,
+			  ptm->tm_mday,
+			  ptm->tm_hour,
+			  ptm->tm_min,
+			  ptm->tm_sec);
 	}
 	count = (count_str[0] == 0) ? 0 : atoi(count_str);
 	mg_printf(conn, "Set-Cookie: count=%i\r\n", count + 1);
@@ -253,67 +253,11 @@ CookieHandler(struct mg_connection *conn, void *cbdata)
 
 
 int
-PostResponser(struct mg_connection *conn, void *cbdata)
-{
-	long long r_total = 0;
-	int r, s;
-
-	char buf[2048];
-
-	const struct mg_request_info *ri = mg_get_request_info(conn);
-
-	if (strcmp(ri->request_method, "POST")) {
-		char buf[1024];
-		int ret = mg_get_request_link(conn, buf, sizeof(buf));
-
-		mg_printf(conn,
-		          "HTTP/1.1 405 Method Not Allowed\r\nConnection: close\r\n");
-		mg_printf(conn, "Content-Type: text/plain\r\n\r\n");
-		mg_printf(conn,
-		          "%s method not allowed in the POST handler\n",
-		          ri->request_method);
-		if (ret >= 0) {
-			mg_printf(conn,
-			          "use a web tool to send a POST request to %s\n",
-			          buf);
-		}
-		return 1;
-	}
-
-	if (ri->content_length >= 0) {
-		/* We know the content length in advance */
-	} else {
-		/* We must read until we find the end (chunked encoding
-		 * or connection close), indicated my mg_read returning 0 */
-	}
-
-	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nConnection: "
-	          "close\r\nTransfer-Encoding: chunked\r\n");
-	mg_printf(conn, "Content-Type: text/plain\r\n\r\n");
-
-	r = mg_read(conn, buf, sizeof(buf));
-	while (r > 0) {
-		r_total += r;
-		s = mg_send_chunk(conn, buf, r);
-		if (r != s) {
-			/* Send error */
-			break;
-		}
-		r = mg_read(conn, buf, sizeof(buf));
-	}
-	mg_printf(conn, "0\r\n");
-
-	return 1;
-}
-
-
-int
 WebSocketStartHandler(struct mg_connection *conn, void *cbdata)
 {
 	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
-	          "close\r\n\r\n");
+		  "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
+		  "close\r\n\r\n");
 
 	mg_printf(conn, "<!DOCTYPE html>\n");
 	mg_printf(conn, "<html>\n<head>\n");
@@ -375,8 +319,8 @@ struct t_ws_client {
 	{                                                                          \
 		if (!(x)) {                                                            \
 			fprintf(stderr,                                                    \
-			        "Assertion failed in line %u\n",                           \
-			        (unsigned)__LINE__);                                       \
+				"Assertion failed in line %u\n",                           \
+				(unsigned)__LINE__);                                       \
 		}                                                                      \
 	}
 
@@ -394,7 +338,7 @@ WebSocketConnectHandler(const struct mg_connection *conn, void *cbdata)
 			ws_clients[i].conn = (struct mg_connection *)conn;
 			ws_clients[i].state = 1;
 			mg_set_user_connection_data(ws_clients[i].conn,
-			                            (void *)(ws_clients + i));
+						    (void *)(ws_clients + i));
 			reject = 0;
 			break;
 		}
@@ -402,8 +346,8 @@ WebSocketConnectHandler(const struct mg_connection *conn, void *cbdata)
 	mg_unlock_context(ctx);
 
 	fprintf(stdout,
-	        "Websocket client %s\r\n\r\n",
-	        (reject ? "rejected" : "accepted"));
+		"Websocket client %s\r\n\r\n",
+		(reject ? "rejected" : "accepted"));
 	return reject;
 }
 
@@ -425,10 +369,10 @@ WebSocketReadyHandler(struct mg_connection *conn, void *cbdata)
 
 int
 WebsocketDataHandler(struct mg_connection *conn,
-                     int bits,
-                     char *data,
-                     size_t len,
-                     void *cbdata)
+		     int bits,
+		     char *data,
+		     size_t len,
+		     void *cbdata)
 {
 	struct t_ws_client *client = mg_get_user_connection_data(conn);
 	ASSERT(client->conn == conn);
@@ -480,7 +424,7 @@ WebSocketCloseHandler(const struct mg_connection *conn, void *cbdata)
 	mg_unlock_context(ctx);
 
 	fprintf(stdout,
-	        "Client droped from the set of webserver connections\r\n\r\n");
+		"Client droped from the set of webserver connections\r\n\r\n");
 }
 
 
@@ -497,9 +441,9 @@ InformWebsockets(struct mg_context *ctx)
 	for (i = 0; i < MAX_WS_CLIENTS; i++) {
 		if (ws_clients[i].state == 2) {
 			mg_websocket_write(ws_clients[i].conn,
-			                   WEBSOCKET_OPCODE_TEXT,
-			                   text,
-			                   strlen(text));
+					   WEBSOCKET_OPCODE_TEXT,
+					   text,
+					   strlen(text));
 		}
 	}
 	mg_unlock_context(ctx);
@@ -592,7 +536,7 @@ init_ssl(void *ssl_context, void *user_data)
 
 
 int
-log_message(const struct mg_connection *conn, const char *message)
+log_message(const char *message)
 {
 	puts(message);
 	return 1;
@@ -610,6 +554,7 @@ main(int argc, char *argv[])
 	int err = 0;
 
 	options.listening_ports = PORT;
+	options.num_threads = 5;
 	options.request_timeout = 10000;
 #ifdef USE_WEBSOCKET
 	options.websocket_timeout = 3600000;
@@ -629,24 +574,24 @@ main(int argc, char *argv[])
 #ifdef USE_IPV6
 	if (!mg_check_feature(8)) {
 		fprintf(stderr,
-		        "Error: Embedded example built with IPv6 support, "
-		        "but civetweb library build without.\n");
+			"Error: Embedded example built with IPv6 support, "
+			"but civetweb library build without.\n");
 		err = 1;
 	}
 #endif
 #ifdef USE_WEBSOCKET
 	if (!mg_check_feature(16)) {
 		fprintf(stderr,
-		        "Error: Embedded example built with websocket support, "
-		        "but civetweb library build without.\n");
+			"Error: Embedded example built with websocket support, "
+			"but civetweb library build without.\n");
 		err = 1;
 	}
 #endif
 #ifndef NO_SSL
 	if (!mg_check_feature(2)) {
 		fprintf(stderr,
-		        "Error: Embedded example built with SSL support, "
-		        "but civetweb library build without.\n");
+			"Error: Embedded example built with SSL support, "
+			"but civetweb library build without.\n");
 		err = 1;
 	}
 #endif
@@ -688,21 +633,18 @@ main(int argc, char *argv[])
 	/* Add handler for /cookie example */
 	mg_set_request_handler(ctx, "/cookie", CookieHandler, 0);
 
-	/* Add handler for /postresponse example */
-	mg_set_request_handler(ctx, "/postresponse", PostResponser, 0);
-
 	/* Add HTTP site to open a websocket connection */
 	mg_set_request_handler(ctx, "/websocket", WebSocketStartHandler, 0);
 
 #ifdef USE_WEBSOCKET
 	/* WS site for the websocket connection */
 	mg_set_websocket_handler(ctx,
-	                         "/websocket",
-	                         WebSocketConnectHandler,
-	                         WebSocketReadyHandler,
-	                         WebsocketDataHandler,
-	                         WebSocketCloseHandler,
-	                         0);
+				 "/websocket",
+				 WebSocketConnectHandler,
+				 WebSocketReadyHandler,
+				 WebsocketDataHandler,
+				 WebSocketCloseHandler,
+				 0);
 #endif
 
 	/* List all listening ports */

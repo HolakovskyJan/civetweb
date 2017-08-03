@@ -20,8 +20,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef CIVETWEB_HEADER_INCLUDED
-#define CIVETWEB_HEADER_INCLUDED
+#ifndef _CIVETWEB_H
+#define _CIVETWEB_H
 
 #define CIVETWEB_VERSION "1.10"
 #define CIVETWEB_VERSION_MAJOR (1)
@@ -117,22 +117,6 @@ struct mg_request_info {
 };
 
 
-/* This structure contains information about the HTTP request. */
-/* This structure may be extended in future versions. */
-struct mg_response_info {
-	int status_code;          /* E.g. 200 */
-	const char *status_text;  /* E.g. "OK" */
-	const char *http_version; /* E.g. "1.0", "1.1" */
-
-	long long content_length; /* Length (in bytes) of the request body,
-				     can be -1 if no length was given. */
-
-	int num_headers; /* Number of HTTP headers */
-	struct mg_header
-	    http_headers[MG_MAX_HEADERS]; /* Allocate maximum headers */
-};
-
-
 /* Client certificate information (part of mg_request_info) */
 struct client_cert {
 	const char *subject;
@@ -167,11 +151,7 @@ struct mg_callbacks {
 
 	/* Called when civetweb is about to log a message. If callback returns
 	   non-zero, civetweb does not log anything. */
-	int (*log_message)(const struct mg_connection *, const char *message);
-
-	/* Called when civetweb is about to log access. If callback returns
-	   non-zero, civetweb does not log anything. */
-	int (*log_access)(const struct mg_connection *, const char *message);
+	int (*log_message)(const char *message);
 
 	/* Called when civetweb initializes SSL library.
 	   Parameters:
@@ -727,19 +707,6 @@ CIVETWEB_API void *
 mg_get_user_connection_data(const struct mg_connection *conn);
 
 
-/* Get a formatted link corresponding to the current request
-
-   Parameters:
-      conn: current connection information.
-      buf: string buffer (out)
-      buflen: length of the string buffer
-   Returns:
-      <0: error
-      >=0: ok */
-CIVETWEB_API int
-mg_get_request_link(const struct mg_connection *conn, char *buf, size_t buflen);
-
-
 struct mg_server_ports {
 	int protocol;    /* 1 = IPv4, 2 = IPv6, 3 = both */
 	int port;        /* port number */
@@ -772,13 +739,6 @@ CIVETWEB_API int mg_get_server_ports(const struct mg_context *ctx,
  */
 CIVETWEB_API const struct mg_request_info *
 mg_get_request_info(const struct mg_connection *);
-
-
-/* Return information associated with a HTTP/HTTPS response.
- * Use this function in a client, to check the response from
- * the server. */
-CIVETWEB_API const struct mg_response_info *
-mg_get_response_info(const struct mg_connection *);
 
 
 /* Send data to the client.
@@ -968,12 +928,6 @@ CIVETWEB_API int mg_get_cookie(const char *cookie,
 			       size_t buf_len);
 
 
-/* Convenience function -- create detached thread.
-   Return: 0 on success, non-0 on error. */
-typedef void *(*mg_thread_func_t)(void *);
-CIVETWEB_API int mg_start_thread(mg_thread_func_t f, void *p);
-
-
 /* Get text representation of HTTP status code. */
 CIVETWEB_API const char *
 mg_get_response_code_text(const struct mg_connection *conn, int response_code);
@@ -1011,14 +965,14 @@ CIVETWEB_API int mg_url_encode(const char *src, char *dst, size_t dst_len);
 CIVETWEB_API char *mg_md5(char buf[33], ...);
 
 
-/* Print error message to the opened error log stream.
+/* Print message to the opened log stream.
    This utilizes the provided logging configuration.
-     conn: connection (not used for sending data, but to get perameters)
+     ctx: context
      fmt: format string without the line return
      ...: variable argument list
    Example:
      mg_cry(conn,"i like %s", "logging"); */
-CIVETWEB_API void mg_cry(const struct mg_connection *conn,
+CIVETWEB_API void mg_cry(const struct mg_context *ctx,
 			 PRINTF_FORMAT_STRING(const char *fmt),
 			 ...) PRINTF_ARGS(2, 3);
 
@@ -1060,12 +1014,11 @@ CIVETWEB_API unsigned mg_check_feature(unsigned feature);
      buffer: Store system information as string here.
      buflen: Length of buffer (including a byte required for a terminating 0).
    Return:
-     Available size of system information, exluding a terminating 0.
+     Available size of system information, including a terminating 0.
      The information is complete, if the return value is smaller than buflen.
    Note:
      It is possible to determine the required buflen, by first calling this
-     function with buffer = NULL and buflen = NULL. The required buflen is
-     one byte more than the returned value.
+     function with buffer = NULL and buflen = 0.
 */
 CIVETWEB_API int mg_get_system_info(char *buffer, int buflen);
 
@@ -1074,4 +1027,4 @@ CIVETWEB_API int mg_get_system_info(char *buffer, int buflen);
 }
 #endif /* __cplusplus */
 
-#endif /* CIVETWEB_HEADER_INCLUDED */
+#endif /* CIVETWEB_H */

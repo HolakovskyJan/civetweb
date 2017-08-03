@@ -21,9 +21,24 @@
     <ClCompile Include="..\..\examples\embedded_c\embedded_c.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\platform\win\civetweb_platform_win.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\civetweb_util.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\include\civetweb.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\platform\civetweb_platform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\platform\win\civetweb_platform_win.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\civetweb_util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
