@@ -832,10 +832,12 @@ mg_get_server_ports(const struct mg_context *ctx,
 			/* IPv4 */
 			ports[cnt].protocol = 1;
 			cnt++;
+#if defined(USE_IPV6)
 		} else if (ctx->listening_sockets[i].lsa.sa.sa_family == AF_INET6) {
 			/* IPv6 */
 			ports[cnt].protocol = 3;
 			cnt++;
+#endif
 		}
 	}
 
