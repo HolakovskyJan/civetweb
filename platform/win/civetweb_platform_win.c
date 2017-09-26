@@ -154,7 +154,7 @@ int mg_initialize_mutex(pthread_mutex_t *mutex)
 	return (*mutex == NULL) ? -1 : 0;
 }
 
-void mg_set_thread_name(const char *name)
+void mg_set_thread_name(unsigned int id, const char *name)
 {
 	char threadName[16 + 1]; /* 16 = Max. thread length in Linux/OSX/.. */
 
@@ -167,7 +167,7 @@ void mg_set_thread_name(const char *name)
 		THREADNAME_INFO info;
 		info.dwType = 0x1000;
 		info.szName = threadName;
-		info.dwThreadID = ~0U;
+		info.dwThreadID = id;
 		info.dwFlags = 0;
 
 		RaiseException(0x406D1388,
@@ -434,20 +434,27 @@ static unsigned __stdcall start_thread_wrapper(void *thread_func_arg)
 /* Start a thread storing the thread context. */
 int mg_start_thread_with_id(mg_thread_func_t func,
 	void *p,
+	const char *name,
+	int priority,
 	pthread_t *threadidptr)
 {
 	uintptr_t uip;
+	unsigned int threadAddr;
 	HANDLE threadhandle;
 	int result = -1;
 	struct mg_thread_arg_wrapper *arg = mg_malloc(sizeof(struct mg_thread_arg_wrapper));
 	arg->func = func;
 	arg->arg = p;
 
-	uip = _beginthreadex(NULL, 0, start_thread_wrapper, arg, 0, NULL);
+	uip = _beginthreadex(NULL, 0, start_thread_wrapper, arg, 0, &threadAddr);
 	threadhandle = (HANDLE)uip;
 	if ((uip != (uintptr_t)(-1L)) && (threadidptr != NULL)) {
-		*threadidptr = threadhandle;
-		result = 0;
+		if (SetThreadPriority(threadhandle, priority))
+		{
+			mg_set_thread_name(threadAddr, name);
+			*threadidptr = threadhandle;
+			result = 0;
+		}
 	}
 
 	return result;
@@ -468,11 +475,6 @@ int mg_join_thread(pthread_t threadid)
 	}
 
 	return result;
-}
-
-void mg_set_master_thread_priority()
-{
-	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 }
 
 void mg_system_init()

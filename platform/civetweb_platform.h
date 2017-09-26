@@ -29,7 +29,7 @@
 #elif CIVETWEB_PLATFORM_UNIX
 #	include "unix/civetweb_platform_unix.h"
 #else
-#	include "civetweb_platform_other.h"
+#	include CIVETWEB_PLATFORM_OTHER_HEADER_PATH
 #endif
 
 
@@ -52,7 +52,6 @@ void * mg_calloc(size_t a, size_t b);
 void * mg_realloc(void *a, size_t b);
 void mg_free(void *a);
 int mg_initialize_mutex(pthread_mutex_t *mutex);
-void mg_set_thread_name(const char *name);
 void mg_get_system_name(char *buffer, int buflen);
 void mg_get_compiler_info(char *buffer, int buflen);
 void gmt_time_string(char *buf, size_t buf_len);
@@ -60,9 +59,10 @@ int set_blocking_mode(SOCKET sock, int blocking);
 void set_close_on_exec(SOCKET sock);
 int mg_start_thread_with_id(mg_thread_func_t func,
 	void *param,
+	const char *name,
+	int priority,
 	pthread_t *threadidptr);
 int mg_join_thread(pthread_t threadid);
-void mg_set_master_thread_priority();
 void mg_system_init();
 void mg_system_cleanup();
 

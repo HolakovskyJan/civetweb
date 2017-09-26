@@ -75,7 +75,7 @@ int mg_initialize_mutex(pthread_mutex_t *mutex)
 }
 
 
-void mg_set_thread_name(const char *name)
+void mg_set_thread_name(pthread_t thread_id, const char *name)
 {
 	char threadName[16 + 1]; /* 16 = Max. thread length in Linux/OSX/.. */
 
@@ -84,10 +84,7 @@ void mg_set_thread_name(const char *name)
 #if defined(__GLIBC__)                                                       \
     && ((__GLIBC__ > 2) || ((__GLIBC__ == 2) && (__GLIBC_MINOR__ >= 12)))
 	/* pthread_setname_np first appeared in glibc in version 2.12*/
-	(void)pthread_setname_np(pthread_self(), threadName);
-#elif defined(__linux__)
-	/* on linux we can use the old prctl function */
-	(void)prctl(PR_SET_NAME, threadName, 0, 0, 0);
+	(void)pthread_setname_np(thread_id, threadName);
 #endif
 }
 
@@ -154,6 +151,8 @@ static void * start_thread_wrapper(void *thread_func_arg)
 
 int mg_start_thread_with_id(mg_thread_func_t func,
 			void *p,
+			const char *name,
+			int priority,
 			pthread_t *threadidptr)
 {
 	pthread_t thread_id;
@@ -172,6 +171,18 @@ int mg_start_thread_with_id(mg_thread_func_t func,
 	result = pthread_create(&thread_id, &attr, start_thread_wrapper, arg);
 	pthread_attr_destroy(&attr);
 	if ((result == 0) && (threadidptr != NULL)) {
+#if defined(USE_MASTER_THREAD_PRIORITY)
+		int min_prio = sched_get_priority_min(SCHED_RR);
+		int max_prio = sched_get_priority_max(SCHED_RR);
+		if ((min_prio >= 0) && (max_prio >= 0)
+			&& ((USE_MASTER_THREAD_PRIORITY) <= max_prio)
+			&& ((USE_MASTER_THREAD_PRIORITY) >= min_prio)) {
+			struct sched_param sched_param = {0};
+			sched_param.sched_priority = (USE_MASTER_THREAD_PRIORITY);
+			pthread_setschedparam(thread_id, SCHED_RR, &sched_param);
+		}
+#endif
+		mg_set_thread_name(thread_id, name);
 		*threadidptr = thread_id;
 	}
 	return result;
@@ -183,21 +194,6 @@ int mg_join_thread(pthread_t threadid)
 
 	result = pthread_join(threadid, NULL);
 	return result;
-}
-
-void mg_set_master_thread_priority()
-{
-#if defined(USE_MASTER_THREAD_PRIORITY)
-	int min_prio = sched_get_priority_min(SCHED_RR);
-	int max_prio = sched_get_priority_max(SCHED_RR);
-	if ((min_prio >= 0) && (max_prio >= 0)
-	    && ((USE_MASTER_THREAD_PRIORITY) <= max_prio)
-	    && ((USE_MASTER_THREAD_PRIORITY) >= min_prio)) {
-		struct sched_param sched_param = {0};
-		sched_param.sched_priority = (USE_MASTER_THREAD_PRIORITY);
-		pthread_setschedparam(pthread_self(), SCHED_RR, &sched_param);
-	}
-#endif
 }
 
 void mg_system_init()

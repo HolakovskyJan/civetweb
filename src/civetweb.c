@@ -20,8 +20,8 @@
  * THE SOFTWARE.
  */
 
-#include "civetweb_platform.h"
-#include "civetweb_util.h"
+#include "../platform/civetweb_platform.h"
+#include "../include/civetweb_util.h"
 
 /* This code uses static_assert to check some conditions.
 * Unfortunately some compilers still do not support it, so we have a
@@ -46,7 +46,7 @@ mg_static_assert(sizeof(void *) >= sizeof(int), "data type size check");
 
 /* Include the header file here, so the CivetWeb interface is defined for the
  * entire implementation, including the following forward definitions. */
-#include "civetweb.h"
+#include "../include/civetweb.h"
 
 #define MG_BUF_LEN (8192)
 
@@ -3178,8 +3178,6 @@ read_websocket(struct mg_connection *conn,
 		timeout = conn->ctx->config.websocket_timeout;
 	}
 
-	mg_set_thread_name("wsock");
-
 	/* Loop continuously, reading messages from the socket, invoking the
 	 * callback, and waiting repeatedly until an error occurs. */
 	while (!conn->ctx->stop_flag) {
@@ -3335,8 +3333,6 @@ read_websocket(struct mg_connection *conn,
 			}
 		}
 	}
-
-	mg_set_thread_name("worker");
 }
 
 
@@ -6521,8 +6517,6 @@ worker_thread_run(struct worker_thread_args *thread_args)
 	struct mg_context *ctx = thread_args->ctx;
 	struct mg_connection *conn;
 
-	mg_set_thread_name("worker");
-
 	if (ctx->callbacks.init_thread) {
 		/* call init_thread for a worker thread (type 1) */
 		ctx->callbacks.init_thread(ctx, 1);
@@ -6720,11 +6714,6 @@ master_thread_run(void *thread_func_param)
 	if (!ctx) {
 		return;
 	}
-
-	mg_set_thread_name("master");
-
-	/* Increase priority of the master thread */
-	mg_set_master_thread_priority();
 
 	if (ctx->callbacks.init_thread) {
 		/* Callback for the master thread (type 0) */
@@ -7169,7 +7158,7 @@ mg_start(const struct mg_callbacks *callbacks,
 	ctx->context_type = 1; /* server context */
 
 	/* Start master (listening) thread */
-	mg_start_thread_with_id(master_thread_run, ctx, &ctx->masterthreadid);
+	mg_start_thread_with_id(master_thread_run, ctx, "master", THREAD_PRIORITY_ABOVE_NORMAL, &ctx->masterthreadid);
 
 	/* Start worker threads */
 	for (i = 0; i < ctx->cfg_worker_threads; i++) {
@@ -7183,6 +7172,8 @@ mg_start(const struct mg_callbacks *callbacks,
 		if ((wta == NULL)
 		    || (mg_start_thread_with_id(worker_thread_run,
 						wta,
+						"worker",
+						THREAD_PRIORITY_NORMAL,
 						&ctx->worker_threadids[i]) != 0)) {
 
 			/* thread was not created */
